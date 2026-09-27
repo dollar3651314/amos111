@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 线上冒烟测试（v2 · Vercel）：在任何能访问外网的机器上执行。
 #   bash e2e/smoke-prod.sh https://quickcomepay.com              # 基本检查
-#   bash e2e/smoke-prod.sh https://quickcomepay.com --ratelimit  # 另外验证限流（会占用本机 IP 10 分钟的提交额度；只发非法请求，不产生线索）
+#   bash e2e/smoke-prod.sh https://quickcomepay.com --ratelimit  # 另外验证限流（会占用本机出网 IP 10 分钟的提交额度；只发非法请求，不产生线索）
 set -uo pipefail
 BASE="${1:?需要站点地址，例如 https://quickcomepay.com}"
 HOST="${BASE#https://}"; HOST="${HOST%%/*}"
@@ -24,8 +24,13 @@ check "非法提交被服务端拒绝（400）" "[ \"\$(code -X POST -H 'content
 check "证书有效且剩余天数 > 14 天" "echo | openssl s_client -servername '$HOST' -connect '$HOST:443' 2>/dev/null | openssl x509 -noout -checkend 1209600 >/dev/null"
 
 if [ "${2:-}" = "--ratelimit" ]; then
-  # 上面已经发过 1 次非法请求；再发 4 次，凑满 5 次，第 6 次应该返回 429
-  for i in 1 2 3 4; do code -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/leads/" >/dev/null; done
-  check "限流：同一 IP 第 6 次提交返回 429" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads/')\" = 429 ]"
+  # 只发非法请求（不产生线索）。出网 IP 可能在一个 IP 池里轮换，所以不能假设"第 6 次一定 429"：
+  # 连续请求，直到出现 429 为止（最多 40 次）。出现 429 说明限流按访客 IP 生效。
+  got=""
+  for i in $(seq 1 40); do
+    c=$(code -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/leads/")
+    if [ "$c" = 429 ]; then got=$i; break; fi
+  done
+  check "限流：同一 IP 超过 5 次后返回 429（第 ${got:-?} 次请求时出现）" "[ -n \"$got\" ]"
 fi
 exit $fail
