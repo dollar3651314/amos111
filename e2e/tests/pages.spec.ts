@@ -117,17 +117,15 @@ test('TC-08 补充 不存在的页面返回 404 页面', async ({ request }) => 
   expect(await r.text()).toContain('Page not found');
 });
 
-test('TC-08 补充 安全响应头齐全（按 vercel.json；严格 CSP 和 HSTS 只对生产域名生效）', async ({ request }) => {
-  const any = (await request.get('/')).headers();
-  expect(any['x-frame-options']).toBe('DENY');
-  expect(any['x-content-type-options']).toBe('nosniff');
-  expect(any['referrer-policy']).toBeTruthy();
-  expect(any['content-security-policy'], '非生产域名不应下发严格 CSP（避免拦截 Vercel 预览工具栏）').toBeUndefined();
-  const prod = (await request.get('/', { headers: { host: 'quickcomepay.com' } })).headers();
-  expect(prod['content-security-policy']).toContain("script-src 'self'");
-  expect(prod['strict-transport-security']).toContain('max-age=31536000');
-  const asset = (await request.get('/favicon.svg')).headers();
-  expect(asset['x-frame-options']).toBe('DENY');
+test('TC-08 补充 安全响应头齐全（按 vercel.json；v2.2 起严格 CSP 和 HSTS 对所有地址生效）', async ({ request }) => {
+  for (const path of ['/', '/zh/contact/', '/favicon.svg']) {
+    const h = (await request.get(path)).headers();
+    expect(h['x-frame-options'], path).toBe('DENY');
+    expect(h['x-content-type-options'], path).toBe('nosniff');
+    expect(h['referrer-policy'], path).toBeTruthy();
+    expect(h['content-security-policy'], path).toContain("script-src 'self'");
+    expect(h['strict-transport-security'], path).toContain('max-age=31536000');
+  }
 });
 
 // TC-08b 补充：生产环境启用了严格 CSP（禁止内联脚本和内联样式），构建产物必须与之兼容

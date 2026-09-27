@@ -37,12 +37,6 @@
     },
     {
       "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "quickcomepay.com"
-        }
-      ],
       "headers": [
         {
           "key": "Strict-Transport-Security",
