@@ -103,6 +103,8 @@ const opt = `(${f.optional})`;
   .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
   .form-alert { background: rgba(201, 42, 42, 0.1); color: var(--danger); border-radius: 8px; padding: 12px 14px; }
   .submit { justify-self: start; }
+  /* 滚动定位时让出顶部固定导航栏的高度，避免标题被遮住（修复 BUG-04） */
+  .lead-success, .lead-form { scroll-margin-top: 96px; }
   .lead-success h2 { color: var(--accent); }
 </style>
 
@@ -188,7 +190,8 @@ const opt = `(${f.optional})`;
         if (res.status === 201) {
           form.hidden = true;
           success.hidden = false;
-          success.focus();
+          success.scrollIntoView({ block: 'start' });
+          success.focus({ preventScroll: true });
           return;
         }
         if (res.status === 400) {
