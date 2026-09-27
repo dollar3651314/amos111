@@ -2,7 +2,7 @@
 :root {
   --navy: #0b1f3a;
   --emerald: #12b886;
-  --emerald-strong: #0a8f68;
+  --emerald-strong: #087f5b;
   --gold: #f5b83d;
 
   --bg: #ffffff;
@@ -45,6 +45,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+/* 保证 hidden 属性不会被组件里的 display 设置覆盖（修复 BUG-01） */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 body {
   margin: 0;
