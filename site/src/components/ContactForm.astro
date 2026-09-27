@@ -1,11 +1,12 @@
 ---
 import { t, href, type Lang } from '../lib/i18n';
+import { IS_PROTOTYPE } from '../lib/env';
 interface Props { lang: Lang }
 const { lang } = Astro.props;
 const f = t(lang).contact.form;
 const opt = `(${f.optional})`;
 ---
-<form class="lead-form card" data-lead-form data-lang={lang} data-messages={JSON.stringify(f.errors)} novalidate>
+<form class="lead-form card" data-lead-form data-lang={lang} data-messages={JSON.stringify(f.errors)} data-prototype={IS_PROTOTYPE ? '1' : undefined} novalidate>
   <div class="form-alert" role="alert" data-form-alert hidden></div>
 
   <div class="row">
@@ -182,6 +183,15 @@ const opt = `(${f.optional})`;
       button.disabled = true;
       button.textContent = button.dataset.busy || '';
       try {
+        // 高保真原型：不调用后端，模拟一次成功提交
+        if (form.dataset.prototype === '1') {
+          await new Promise((r) => setTimeout(r, 600));
+          form.hidden = true;
+          success.hidden = false;
+          success.scrollIntoView({ block: 'start' });
+          success.focus({ preventScroll: true });
+          return;
+        }
         const res = await fetch('/api/leads', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
