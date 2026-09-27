@@ -1,0 +1,31 @@
+[Unit]
+Description=Quick Come website lead API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=quickcome
+Group=quickcome
+WorkingDirectory=/srv/quickcome/lead-api/current
+EnvironmentFile=/etc/quickcome/lead-api.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+
+# 加固：最小权限，只允许写数据目录
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/quickcome
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

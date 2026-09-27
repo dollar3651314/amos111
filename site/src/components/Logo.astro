@@ -1,0 +1,17 @@
+---
+// QuickCome 标志：硬币里放一个向右的双箭头（»），表示"快速到达"。
+interface Props { size?: number; wordmark?: boolean }
+const { size = 32, wordmark = true } = Astro.props;
+---
+<span class="logo">
+  <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <circle cx="16" cy="16" r="15" fill="#12B886" />
+    <path d="M9 10l6 6-6 6M16 10l6 6-6 6" fill="none" stroke="#0B1F3A" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+  {wordmark && <span class="wordmark">Quick<span>Come</span></span>}
+</span>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 10px; }
+  .wordmark { font-weight: 800; font-size: 1.3rem; letter-spacing: -0.02em; color: inherit; }
+  .wordmark span { color: #12b886; }
+</style>

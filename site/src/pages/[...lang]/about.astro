@@ -1,0 +1,42 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CtaBand from '../../components/CtaBand.astro';
+import { t, href, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const a = d.about;
+---
+<Layout lang={lang} page="about" title={d.pages.about.title} description={d.pages.about.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{a.heading}</h1><p class="lead">{a.intro}</p></div>
+  </section>
+  <section class="section">
+    <div class="container mission">
+      <h2>{a.missionTitle}</h2>
+      <p class="lead">{a.mission}</p>
+    </div>
+  </section>
+  <section class="section soft">
+    <div class="container">
+      <div class="section-head"><h2>{a.valuesTitle}</h2></div>
+      <div class="grid grid-3">
+        {a.values.map((v) => <div class="card"><h3>{v.title}</h3><p class="muted">{v.body}</p></div>)}
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <div class="container">
+      <h2>{a.contactTitle}</h2>
+      <p class="muted">{a.contactBody}</p>
+      <p class="actions">
+        <a class="btn btn-primary" href={href(lang, 'contact')} data-cta>{d.cta.button}</a>
+        <a class="btn btn-outline" href={`mailto:${d.brand.salesEmail}`}>{d.brand.salesEmail}</a>
+      </p>
+    </div>
+  </section>
+</Layout>
+<style>
+  .mission { max-width: 820px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+</style>

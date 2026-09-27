@@ -1,0 +1,43 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CtaBand from '../../components/CtaBand.astro';
+import { t, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const s = d.solutions;
+---
+<Layout lang={lang} page="solutions" title={d.pages.solutions.title} description={d.pages.solutions.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{s.heading}</h1><p class="lead">{s.intro}</p></div>
+  </section>
+  {s.items.map((it, i) => (
+    <section class={`section ${i % 2 ? 'soft' : ''}`} id={it.id}>
+      <div class="container">
+        <div class="section-head">
+          <h2>{it.name}</h2>
+          <p class="lead">{it.summary}</p>
+        </div>
+        <div class="grid grid-3">
+          <div class="card">
+            <h3>{s.painsLabel}</h3>
+            <ul class="pains">{it.pains.map((p) => <li>{p}</li>)}</ul>
+          </div>
+          <div class="card">
+            <h3>{s.solutionLabel}</h3>
+            <p class="muted">{it.solution}</p>
+          </div>
+          <div class="card">
+            <h3>{s.benefitsLabel}</h3>
+            <ul class="check-list">{it.benefits.map((b) => <li>{b}</li>)}</ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  ))}
+  <CtaBand lang={lang} />
+</Layout>
+<style>
+  .pains { margin: 0; padding-left: 1.2em; color: var(--text-muted); display: grid; gap: 8px; }
+  section[id] { scroll-margin-top: 80px; }
+</style>

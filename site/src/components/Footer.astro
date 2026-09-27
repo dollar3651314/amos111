@@ -1,0 +1,57 @@
+---
+import Logo from './Logo.astro';
+import { t, href, type Lang } from '../lib/i18n';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const d = t(lang);
+const year = new Date().getFullYear();
+---
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div>
+        <Logo />
+        <p class="about">{d.footer.about}</p>
+        <p><a href={`mailto:${d.brand.salesEmail}`}>{d.brand.salesEmail}</a></p>
+      </div>
+      <div>
+        <h2>{d.footer.linksTitle}</h2>
+        <ul>
+          <li><a href={href(lang, 'solutions')}>{d.nav.solutions}</a></li>
+          <li><a href={href(lang, 'how')}>{d.nav.how}</a></li>
+          <li><a href={href(lang, 'security')}>{d.nav.security}</a></li>
+          <li><a href={href(lang, 'about')}>{d.nav.about}</a></li>
+          <li><a href={href(lang, 'contact')}>{d.nav.contact}</a></li>
+        </ul>
+      </div>
+      <div>
+        <h2>{d.footer.legalTitle}</h2>
+        <ul>
+          <li><a href={href(lang, 'privacy')} data-footer-privacy>{d.footer.privacy}</a></li>
+          <li><a href={href(lang, 'terms')} data-footer-terms>{d.footer.terms}</a></li>
+        </ul>
+      </div>
+    </div>
+    <section class="risk" aria-labelledby="risk-title" data-risk-notice>
+      <h2 id="risk-title">{d.footer.riskTitle}</h2>
+      <p>{d.footer.risk}</p>
+      <p data-not-mainland><strong>{d.footer.notMainland}</strong></p>
+    </section>
+    <p class="copy">© {year} {d.brand.entity}. {d.footer.rights}</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer { background: var(--navy); color: #c3cfdd; padding: 56px 0 32px; font-size: 0.95rem; }
+  .site-footer :global(.logo) { color: #fff; }
+  .site-footer a { color: #e8eef5; text-decoration: none; }
+  .site-footer a:hover { text-decoration: underline; }
+  .cols { display: grid; gap: 32px; grid-template-columns: 2fr 1fr 1fr; }
+  .about { margin-top: 16px; max-width: 360px; }
+  h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; color: #fff; margin-bottom: 14px; }
+  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .risk { border-top: 1px solid rgba(255, 255, 255, 0.12); margin-top: 40px; padding-top: 24px; font-size: 0.85rem; }
+  .risk h2 { margin-bottom: 8px; }
+  .copy { font-size: 0.85rem; margin: 16px 0 0; color: #8fa1b5; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr 1fr; } .cols > :first-child { grid-column: 1 / -1; } }
+</style>

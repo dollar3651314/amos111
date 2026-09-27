@@ -1,0 +1,8 @@
+# 首次申请证书前使用的临时配置：只提供 ACME 验证路径。
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name __DOMAIN__ www.__DOMAIN__ __ALT_DOMAIN__ www.__ALT_DOMAIN__;
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 503; }
+}

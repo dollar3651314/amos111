@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 48" role="img" aria-label="QuickCome">
+  <circle cx="24" cy="24" r="22" fill="#12B886"/>
+  <path d="M13.5 15l9 9-9 9M24 15l9 9-9 9" fill="none" stroke="#0B1F3A" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="56" y="33" font-family="-apple-system, 'Segoe UI', Roboto, Arial, sans-serif" font-size="28" font-weight="800" letter-spacing="-0.5" fill="#FFFFFF">Quick<tspan fill="#12B886">Come</tspan></text>
+</svg>

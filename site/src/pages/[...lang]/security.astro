@@ -1,0 +1,39 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CtaBand from '../../components/CtaBand.astro';
+import { t, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const s = d.security;
+---
+<Layout lang={lang} page="security" title={d.pages.security.title} description={d.pages.security.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{s.heading}</h1><p class="lead">{s.intro}</p></div>
+  </section>
+  <section class="section">
+    <div class="container grid grid-2">
+      {s.sections.map((x) => (
+        <div class="card"><h2 class="h3">{x.title}</h2><p class="muted">{x.body}</p></div>
+      ))}
+    </div>
+  </section>
+  <section class="section soft">
+    <div class="container grid grid-2">
+      <div class="card risk" data-risk-section>
+        <h2>{s.riskTitle}</h2>
+        <ul>{s.riskItems.map((r) => <li>{r}</li>)}</ul>
+      </div>
+      <div class="card">
+        <h2>{s.entityTitle}</h2>
+        <p class="muted">{s.entityBody}</p>
+      </div>
+    </div>
+  </section>
+  <CtaBand lang={lang} />
+</Layout>
+<style>
+  .h3 { font-size: 1.15rem; }
+  .risk { border-left: 4px solid var(--gold); }
+  .risk ul { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; color: var(--text-muted); }
+</style>

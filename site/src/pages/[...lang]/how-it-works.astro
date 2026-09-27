@@ -1,0 +1,57 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CtaBand from '../../components/CtaBand.astro';
+import { t, href, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const h = d.how;
+---
+<Layout lang={lang} page="how" title={d.pages.how.title} description={d.pages.how.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{h.heading}</h1><p class="lead">{h.intro}</p></div>
+  </section>
+  <section class="section">
+    <div class="container">
+      <ol class="timeline">
+        {h.steps.map((s, i) => (
+          <li><span class="num">{i + 1}</span><div><h2>{s.title}</h2><p class="muted">{s.body}</p></div></li>
+        ))}
+      </ol>
+    </div>
+  </section>
+  <section class="section soft">
+    <div class="container grid grid-2">
+      <div class="card">
+        <h2>{h.assetsTitle}</h2>
+        <h3>{h.coinsLabel}</h3>
+        <ul class="chips">{h.coins.map((c) => <li>{c}</li>)}</ul>
+        <h3>{h.chainsLabel}</h3>
+        <ul class="chips">{h.chains.map((c) => <li>{c}</li>)}</ul>
+        <p class="muted note">{h.assetsNote}</p>
+      </div>
+      <div class="card fiat" data-fiat-section>
+        <h2>{h.fiatTitle}</h2>
+        <p class="muted">{h.fiatBody}</p>
+        <a class="btn btn-primary" href={href(lang, 'contact')} data-cta>{h.fiatButton}</a>
+      </div>
+    </div>
+  </section>
+  <CtaBand lang={lang} />
+</Layout>
+<style>
+  .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; max-width: 780px; }
+  .timeline li { display: grid; grid-template-columns: 48px 1fr; gap: 20px; position: relative; padding-bottom: 28px; }
+  .timeline li:not(:last-child)::before {
+    content: ''; position: absolute; left: 23px; top: 48px; bottom: 4px; width: 2px; background: var(--border);
+  }
+  .timeline .num {
+    width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--navy); color: #fff; font-weight: 700; border: 3px solid var(--emerald);
+  }
+  .timeline h2 { font-size: 1.2rem; margin: 10px 0 4px; }
+  .chips { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips li { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 4px 14px; font-weight: 600; }
+  .note { font-size: 0.9rem; margin: 0; }
+  .fiat { border-color: var(--emerald); }
+</style>

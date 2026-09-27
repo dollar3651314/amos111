@@ -1,0 +1,44 @@
+# 生产环境站点配置模板。部署脚本会把 __DOMAIN__、__ALT_DOMAIN__ 替换成实际域名，
+# 渲染结果放到 /etc/nginx/sites-available/quickcome.conf。
+# 前提：证书已经通过 certbot 申请好（见《部署方案》第 4 步）。
+
+# HTTP：只保留 ACME 验证路径，其余请求全部 301 跳转到 HTTPS 主域名
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __DOMAIN__ www.__DOMAIN__ __ALT_DOMAIN__ www.__ALT_DOMAIN__;
+    include /etc/nginx/snippets/cloudflare-realip.conf;
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 301 https://__DOMAIN__$request_uri; }
+}
+
+# HTTPS：www 子域名和备用域名，统一 301 跳转到主域名
+server {
+    # Ubuntu 24.04 自带 Nginx 1.24，还不支持 1.25 的 "http2 on;" 写法
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.__DOMAIN__ __ALT_DOMAIN__ www.__ALT_DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    include /etc/nginx/snippets/quickcome-ssl.conf;
+    # 续期时，如果 Cloudflare 开启了"始终使用 HTTPS"，ACME 验证请求会被跳到 443，这里也要能响应
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 301 https://__DOMAIN__$request_uri; }
+}
+
+# HTTPS：主站
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name __DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/__DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__DOMAIN__/privkey.pem;
+    include /etc/nginx/snippets/quickcome-ssl.conf;
+    include /etc/nginx/snippets/cloudflare-realip.conf;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    root /var/www/quickcome/current;
+    # 续期时，如果 Cloudflare 开启了"始终使用 HTTPS"，ACME 验证请求会被跳到 443，这里也要能响应
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    include /etc/nginx/snippets/quickcome-site.conf;
+}

@@ -1,0 +1,90 @@
+---
+import Logo from './Logo.astro';
+import { t, href, type Lang, type PageKey } from '../lib/i18n';
+interface Props { lang: Lang; page: PageKey | null }
+const { lang, page } = Astro.props;
+const d = t(lang);
+const other: Lang = lang === 'en' ? 'zh' : 'en';
+const nav: { key: PageKey; label: string }[] = [
+  { key: 'solutions', label: d.nav.solutions },
+  { key: 'how', label: d.nav.how },
+  { key: 'security', label: d.nav.security },
+  { key: 'about', label: d.nav.about },
+];
+---
+<header class="site-header">
+  <div class="container bar">
+    <a class="brand" href={href(lang, 'home')} aria-label={`QuickCome - ${d.nav.home}`}><Logo /></a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-toggle>
+      <span class="menu-icon" aria-hidden="true"></span>
+      <span class="menu-label">{d.nav.menu}</span>
+    </button>
+    <nav id="site-nav" class="nav" aria-label="Main">
+      <ul>
+        {nav.map((n) => (
+          <li><a href={href(lang, n.key)} aria-current={page === n.key ? 'page' : undefined}>{n.label}</a></li>
+        ))}
+      </ul>
+      <div class="nav-actions">
+        <a class="lang-switch" href={href(other, page ?? 'home')} hreflang={other === 'zh' ? 'zh-Hans' : 'en'} lang={other === 'zh' ? 'zh-Hans' : 'en'} aria-label={d.nav.switchAria} data-lang-switch>{d.nav.switchLabel}</a>
+        <a class="btn btn-primary" href={href(lang, 'contact')} data-cta>{d.nav.cta}</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--hero-bg); color: var(--hero-text);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; }
+  .brand { color: inherit; text-decoration: none; }
+  .nav { display: flex; align-items: center; gap: 28px; }
+  .nav ul { display: flex; gap: 22px; list-style: none; margin: 0; padding: 0; }
+  .nav a:not(.btn) { color: var(--hero-muted); text-decoration: none; font-weight: 500; }
+  .nav a:not(.btn):hover, .nav a[aria-current='page'] { color: #fff; }
+  .nav a[aria-current='page'] { box-shadow: inset 0 -2px 0 var(--emerald); }
+  .nav-actions { display: flex; align-items: center; gap: 16px; }
+  .lang-switch {
+    border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 999px;
+    padding: 6px 12px; min-height: 36px; display: inline-flex; align-items: center;
+  }
+  .menu-toggle {
+    display: none; align-items: center; gap: 8px;
+    background: transparent; color: inherit; border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px; padding: 8px 12px; min-height: 44px; font: inherit; cursor: pointer;
+  }
+  .menu-icon, .menu-icon::before, .menu-icon::after {
+    display: block; width: 18px; height: 2px; background: currentColor; position: relative;
+  }
+  .menu-icon::before, .menu-icon::after { content: ''; position: absolute; left: 0; }
+  .menu-icon::before { top: -6px; }
+  .menu-icon::after { top: 6px; }
+
+  @media (max-width: 960px) {
+    .menu-toggle { display: inline-flex; }
+    .nav {
+      display: none; position: absolute; left: 0; right: 0; top: 100%;
+      flex-direction: column; align-items: stretch; gap: 16px;
+      background: var(--hero-bg); padding: 16px 20px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .nav.open { display: flex; }
+    .nav ul { flex-direction: column; gap: 4px; }
+    .nav ul a { display: block; padding: 10px 0; }
+    .nav a[aria-current='page'] { box-shadow: none; color: var(--emerald); }
+    .nav-actions { justify-content: space-between; }
+  }
+</style>
+
+<script>
+  const toggle = document.querySelector<HTMLButtonElement>('[data-menu-toggle]');
+  const nav = document.getElementById('site-nav');
+  toggle?.addEventListener('click', () => {
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(open));
+    nav?.classList.toggle('open', open);
+  });
+</script>
