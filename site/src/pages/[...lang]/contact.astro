@@ -1,0 +1,30 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ContactForm from '../../components/ContactForm.astro';
+import { t, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const c = d.contact;
+---
+<Layout lang={lang} page="contact" title={d.pages.contact.title} description={d.pages.contact.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{c.heading}</h1><p class="lead">{c.intro}</p></div>
+  </section>
+  <section class="section soft">
+    <div class="container layout">
+      <div><ContactForm lang={lang} /></div>
+      <aside>
+        <h2 class="h3">{c.asideTitle}</h2>
+        <ul class="check-list">{c.asideItems.map((x) => <li>{x}</li>)}</ul>
+        <p class="muted email">{c.asideEmail} <a href={`mailto:${d.brand.salesEmail}`}>{d.brand.salesEmail}</a></p>
+      </aside>
+    </div>
+  </section>
+</Layout>
+<style>
+  .layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+  .h3 { font-size: 1.2rem; }
+  .email { margin-top: 24px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+</style>

@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { t, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const doc = d.terms;
+---
+<Layout lang={lang} page="terms" title={d.pages.terms.title} description={d.pages.terms.description}>
+  <section class="page-hero">
+    <div class="container"><h1>{doc.heading}</h1><p class="lead">{d.legal.updatedLabel}: {d.legal.updated}</p></div>
+  </section>
+  <section class="section">
+    <div class="container legal">
+      {doc.sections.map((s) => (<><h2>{s.title}</h2><p>{s.body}</p></>))}
+    </div>
+  </section>
+</Layout>

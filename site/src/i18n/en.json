@@ -1,0 +1,466 @@
+{
+  "brand": {
+    "name": "Quick Come",
+    "tagline": "Get paid across borders in minutes, not days.",
+    "entity": "Quick Come",
+    "salesEmail": "sales@quickcomepay.com",
+    "privacyEmail": "privacy@quickcomepay.com"
+  },
+  "nav": {
+    "home": "Home",
+    "solutions": "Solutions",
+    "how": "How it works",
+    "security": "Security & Compliance",
+    "about": "About",
+    "contact": "Contact",
+    "cta": "Book a demo",
+    "menu": "Menu",
+    "switchLabel": "中文",
+    "switchAria": "切换到中文"
+  },
+  "footer": {
+    "about": "Stablecoin collections for exporters, manufacturers and B2B traders.",
+    "linksTitle": "Company",
+    "legalTitle": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "riskTitle": "Risk notice",
+    "risk": "Stablecoins are digital assets. Their value may deviate from the reference currency, and blockchain transactions are generally irreversible once confirmed. Availability of services depends on your jurisdiction and on completing our onboarding checks. Nothing on this website is investment, legal or tax advice.",
+    "notMainland": "Quick Come services are not offered to residents or entities in Mainland China.",
+    "rights": "All rights reserved."
+  },
+  "cta": {
+    "title": "See how Quick Come fits your business",
+    "body": "Tell us how you get paid today. Our team will walk you through a tailored setup, including settlement options.",
+    "button": "Book a demo",
+    "secondary": "Talk to sales"
+  },
+  "pages": {
+    "home": {
+      "title": "Quick Come - Stablecoin payments for cross-border trade",
+      "description": "Quick Come helps exporters, manufacturers and B2B traders collect payments from overseas buyers in USDT and USDC, with clear records and a guided onboarding."
+    },
+    "solutions": {
+      "title": "Solutions by industry - Quick Come",
+      "description": "How exporters, manufacturers and cross-border B2B traders use Quick Come to collect international payments in stablecoins."
+    },
+    "how": {
+      "title": "How it works - Quick Come",
+      "description": "From onboarding to receiving USDT or USDC: the steps to start collecting cross-border payments with Quick Come."
+    },
+    "security": {
+      "title": "Security & Compliance - Quick Come",
+      "description": "How Quick Come approaches account security, business verification, transaction screening and risk disclosure."
+    },
+    "about": {
+      "title": "About - Quick Come",
+      "description": "Quick Come makes stablecoin collections simple for traditional businesses that sell across borders."
+    },
+    "contact": {
+      "title": "Book a demo - Quick Come",
+      "description": "Talk to the Quick Come team about collecting cross-border payments in stablecoins."
+    },
+    "privacy": {
+      "title": "Privacy Policy - Quick Come",
+      "description": "How Quick Come collects and uses information submitted on this website."
+    },
+    "terms": {
+      "title": "Terms of Service - Quick Come",
+      "description": "Terms that apply to your use of the Quick Come website."
+    },
+    "notFound": {
+      "title": "Page not found - Quick Come",
+      "description": "The page you are looking for does not exist.",
+      "heading": "Page not found",
+      "body": "The page you are looking for may have moved.",
+      "back": "Back to home"
+    }
+  },
+  "home": {
+    "eyebrow": "Stablecoin collections for real-world trade",
+    "heroTitle": "Get paid by overseas buyers in minutes, not days",
+    "heroBody": "Quick Come lets exporters, manufacturers and B2B traders accept USDT and USDC from customers worldwide, with a clear record of every payment and a team that helps you set it up.",
+    "heroPrimary": "Book a demo",
+    "heroSecondary": "See how it works",
+    "heroPoints": [
+      "USDT and USDC",
+      "Major public blockchains",
+      "Guided business onboarding"
+    ],
+    "featuresTitle": "Why businesses choose Quick Come",
+    "features": [
+      {
+        "title": "Faster settlement",
+        "body": "Stablecoin transfers typically confirm on-chain within minutes, around the clock, including weekends and holidays."
+      },
+      {
+        "title": "Reach more buyers",
+        "body": "Accept payments from customers in markets where international bank transfers are slow, costly or hard to arrange."
+      },
+      {
+        "title": "Transparent records",
+        "body": "Every payment has an on-chain reference and a matching record, which makes reconciliation with your orders simpler."
+      },
+      {
+        "title": "Settlement on your terms",
+        "body": "Keep funds in stablecoins or discuss conversion and payout options with our sales team."
+      }
+    ],
+    "compareTitle": "Bank wire vs. Quick Come",
+    "compareHeaders": [
+      "",
+      "Traditional bank wire",
+      "Quick Come"
+    ],
+    "compareRows": [
+      [
+        "Arrival",
+        "Often several business days",
+        "Typically minutes after on-chain confirmation"
+      ],
+      [
+        "Availability",
+        "Banking hours and business days",
+        "24/7, 365 days a year"
+      ],
+      [
+        "Intermediary deductions",
+        "Correspondent banks may deduct charges",
+        "No correspondent banks in the payment path"
+      ],
+      [
+        "Tracking",
+        "Limited visibility while in transit",
+        "Every payment traceable by transaction ID"
+      ],
+      [
+        "Fiat payout",
+        "Standard",
+        "Contact sales"
+      ]
+    ],
+    "stepsTitle": "How it works",
+    "steps": [
+      {
+        "title": "Get verified",
+        "body": "Complete business verification (KYB) with guidance from our team."
+      },
+      {
+        "title": "Share payment details",
+        "body": "Send your buyer a payment request with the amount, asset and network."
+      },
+      {
+        "title": "Buyer pays",
+        "body": "Your buyer pays in USDT or USDC from their wallet or exchange account."
+      },
+      {
+        "title": "Funds arrive",
+        "body": "The payment is recorded against your order once confirmed on-chain."
+      }
+    ],
+    "stepsLink": "Learn more about the process",
+    "industriesTitle": "Built for businesses that sell across borders",
+    "industriesLink": "Explore solutions",
+    "trustTitle": "Designed with trust in mind",
+    "trust": [
+      "Business verification (KYB) for every account",
+      "Transaction screening on incoming payments",
+      "Clear risk disclosures, no hidden promises",
+      "A dedicated team for onboarding and support"
+    ],
+    "trustLink": "Read about security & compliance",
+    "visual": {
+      "received": "Payment received",
+      "order": "Order",
+      "network": "Network",
+      "status": "Status",
+      "confirmed": "Confirmed"
+    }
+  },
+  "solutions": {
+    "heading": "Solutions for traditional industries",
+    "intro": "Every industry gets paid differently. Here is how Quick Come fits into the way you already trade.",
+    "painsLabel": "Common challenges",
+    "solutionLabel": "How Quick Come helps",
+    "benefitsLabel": "What you get",
+    "items": [
+      {
+        "id": "export",
+        "name": "Exporters",
+        "summary": "Collect payment from overseas buyers without waiting on the banking system.",
+        "pains": [
+          "International wires take days and are unpredictable",
+          "Some buyers struggle to send bank transfers from their country",
+          "Charges from intermediary banks reduce the amount received"
+        ],
+        "solution": "Issue payment requests in USDT or USDC. Buyers pay from a wallet or exchange account, and you see the payment as soon as it is confirmed on-chain.",
+        "benefits": [
+          "Ship sooner once payment is confirmed",
+          "Serve buyers in more markets",
+          "Know exactly what you received"
+        ]
+      },
+      {
+        "id": "manufacturing",
+        "name": "Manufacturers",
+        "summary": "Get paid by distributors and overseas customers with clear, traceable records.",
+        "pains": [
+          "Long payment cycles strain working capital",
+          "Uncertain arrival times make production planning harder",
+          "Matching incoming wires to orders is manual work"
+        ],
+        "solution": "Receive deposits and balance payments in stablecoins, each linked to an order reference, so your finance team can reconcile quickly.",
+        "benefits": [
+          "More predictable cash flow",
+          "Payments tied to order references",
+          "Records ready for your finance team"
+        ]
+      },
+      {
+        "id": "b2b",
+        "name": "Cross-border B2B traders",
+        "summary": "One way to get paid across many countries and counterparties.",
+        "pains": [
+          "Maintaining banking channels in many countries",
+          "Different payment methods for each counterparty",
+          "Complex reconciliation across currencies"
+        ],
+        "solution": "Use stablecoins as a single collection method across counterparties, and discuss conversion and payout options with our sales team.",
+        "benefits": [
+          "One collection method across markets",
+          "Consistent records for every trade",
+          "Flexible settlement, arranged with sales"
+        ]
+      }
+    ]
+  },
+  "how": {
+    "heading": "How Quick Come works",
+    "intro": "Getting started takes a few steps. Our team guides you through each one.",
+    "steps": [
+      {
+        "title": "Talk to us",
+        "body": "Book a demo and tell us about your business, your buyers and how you get paid today."
+      },
+      {
+        "title": "Business verification",
+        "body": "Complete KYB: company documents, ownership information and the nature of your business."
+      },
+      {
+        "title": "Set up your account",
+        "body": "We configure your account, supported assets and networks, and the team members who can access it."
+      },
+      {
+        "title": "Request payment",
+        "body": "Send your buyer a payment request with the amount, asset, network and order reference."
+      },
+      {
+        "title": "Receive and reconcile",
+        "body": "Incoming payments are screened, confirmed on-chain and recorded against the order."
+      },
+      {
+        "title": "Settle",
+        "body": "Hold funds in stablecoins, or arrange conversion and payout. Fiat settlement terms are agreed with our sales team."
+      }
+    ],
+    "assetsTitle": "Supported assets and networks",
+    "coinsLabel": "Stablecoins",
+    "coins": [
+      "USDT",
+      "USDC"
+    ],
+    "chainsLabel": "Networks",
+    "chains": [
+      "TRON",
+      "Ethereum",
+      "and other major public blockchains"
+    ],
+    "assetsNote": "The exact list of supported networks is confirmed during onboarding.",
+    "fiatTitle": "Fiat conversion and payout",
+    "fiatBody": "Conversion to local currency, payout methods, pricing and timelines depend on your jurisdiction and business profile. Please contact sales to discuss your needs.",
+    "fiatButton": "Contact sales"
+  },
+  "security": {
+    "heading": "Security & Compliance",
+    "intro": "Traditional businesses rightly ask hard questions about digital assets. Here is how we approach them.",
+    "sections": [
+      {
+        "title": "Business verification (KYB)",
+        "body": "Every business is verified before its account is activated. We review company registration, ownership and the nature of the business."
+      },
+      {
+        "title": "Transaction screening",
+        "body": "Incoming payments are screened against risk indicators. Payments that raise concerns may be held for review."
+      },
+      {
+        "title": "Account security",
+        "body": "Accounts support two-factor authentication and role-based access, so each team member only sees what they need."
+      },
+      {
+        "title": "Clear records",
+        "body": "Every payment is linked to an on-chain transaction ID and an order reference, giving you an auditable trail."
+      }
+    ],
+    "riskTitle": "Understand the risks",
+    "riskItems": [
+      "Stablecoins are digital assets and are not bank deposits.",
+      "The value of a stablecoin may deviate from its reference currency.",
+      "Blockchain transactions are generally irreversible once confirmed. Sending funds to a wrong address or network can result in permanent loss.",
+      "Services are subject to the laws of your jurisdiction and to successful completion of our onboarding checks."
+    ],
+    "entityTitle": "Who we are",
+    "entityBody": "Quick Come services are provided by Quick Come. Services are not offered to residents or entities in Mainland China."
+  },
+  "about": {
+    "heading": "About Quick Come",
+    "intro": "Quick Come exists to make stablecoin payments practical for businesses that make and move real goods.",
+    "missionTitle": "Our mission",
+    "mission": "Cross-border trade still runs on payment rails built decades ago. We want exporters, manufacturers and traders to get paid as quickly as they can ship, with the clarity their finance teams need.",
+    "valuesTitle": "What we believe",
+    "values": [
+      {
+        "title": "Clarity over hype",
+        "body": "We explain what stablecoins can and cannot do, and we do not make promises we cannot keep."
+      },
+      {
+        "title": "Built for operators",
+        "body": "Our customers run factories and trading businesses. Our product and support are designed around their day-to-day work."
+      },
+      {
+        "title": "Trust is earned",
+        "body": "Verification, screening and transparent records are part of the product, not an afterthought."
+      }
+    ],
+    "contactTitle": "Get in touch",
+    "contactBody": "Questions about Quick Come? Email us or book a demo."
+  },
+  "contact": {
+    "heading": "Book a demo",
+    "intro": "Tell us a little about your business. Our team will get back to you by email, usually within one business day.",
+    "asideTitle": "What to expect",
+    "asideItems": [
+      "A short call to understand how you get paid today",
+      "A walkthrough of Quick Come for your use case",
+      "Settlement and fiat options discussed with our sales team"
+    ],
+    "asideEmail": "Prefer email? Write to",
+    "form": {
+      "name": "Full name",
+      "company": "Company name",
+      "email": "Work email",
+      "country": "Country / region",
+      "industry": "Industry",
+      "industryPlaceholder": "Select your industry",
+      "industries": {
+        "export": "Export",
+        "manufacturing": "Manufacturing",
+        "b2b": "Cross-border B2B trade",
+        "other": "Other"
+      },
+      "volume": "Monthly collection volume",
+      "volumePlaceholder": "Select a range (optional)",
+      "volumes": {
+        "lt50k": "Under USD 50k",
+        "50k-250k": "USD 50k - 250k",
+        "250k-1m": "USD 250k - 1M",
+        "gt1m": "Over USD 1M"
+      },
+      "phone": "Phone / WhatsApp",
+      "message": "How can we help?",
+      "optional": "optional",
+      "consentBefore": "I agree to the processing of my information as described in the",
+      "consentLink": "Privacy Policy",
+      "consentAfter": ".",
+      "website": "Leave this field empty",
+      "submit": "Send request",
+      "submitting": "Sending...",
+      "successTitle": "Thank you!",
+      "successBody": "We have received your request and will contact you by email soon.",
+      "errors": {
+        "required": "This field is required.",
+        "email": "Please enter a valid email address.",
+        "phone": "Please use digits, spaces, +, - or () only.",
+        "length": "This entry is too long or too short.",
+        "consent": "Please accept the Privacy Policy to continue.",
+        "rate": "Too many requests. Please try again in a few minutes.",
+        "network": "We could not send your request. Please check your connection and try again.",
+        "server": "Something went wrong on our side. Please try again, or email us directly.",
+        "summary": "Please correct the highlighted fields."
+      }
+    }
+  },
+  "legal": {
+    "updatedLabel": "Last updated",
+    "updated": "2026-09-27"
+  },
+  "privacy": {
+    "heading": "Privacy Policy",
+    "sections": [
+      {
+        "title": "Who we are",
+        "body": "This website is operated by Quick Come (\"we\", \"us\"). For privacy questions, contact privacy@quickcomepay.com."
+      },
+      {
+        "title": "What we collect",
+        "body": "When you submit the demo request form, we collect the information you provide: name, company, work email, country or region, industry, and optionally your collection volume, phone number and message. We also record your IP address, browser user agent and the time of submission to protect the form against abuse."
+      },
+      {
+        "title": "How we use it",
+        "body": "We use this information only to respond to your request, to discuss our services with you, and to prevent spam and abuse. We do not sell your information."
+      },
+      {
+        "title": "Cookies and analytics",
+        "body": "This website does not use advertising cookies or third-party analytics. If this changes, we will update this policy first."
+      },
+      {
+        "title": "Sharing",
+        "body": "Your information is processed by our email service provider to deliver your request to our team. We may disclose information where required by law."
+      },
+      {
+        "title": "Retention",
+        "body": "We keep form submissions for as long as needed to handle your request and our business relationship, and delete them when no longer needed."
+      },
+      {
+        "title": "Your rights",
+        "body": "Depending on where you live, you may have the right to access, correct or delete your information, or object to its processing. Contact privacy@quickcomepay.com to make a request."
+      },
+      {
+        "title": "Changes",
+        "body": "We may update this policy. The date at the top shows when it was last changed."
+      }
+    ]
+  },
+  "terms": {
+    "heading": "Terms of Service",
+    "sections": [
+      {
+        "title": "About these terms",
+        "body": "These terms apply to your use of the Quick Come website. Our payment services are governed by separate agreements signed during onboarding."
+      },
+      {
+        "title": "Information only",
+        "body": "Content on this website is for general information about our services. It is not investment, legal, tax or financial advice, and it is not an offer in any jurisdiction where such an offer would be unlawful."
+      },
+      {
+        "title": "Eligibility",
+        "body": "Our services are available only to businesses that pass our verification checks and are located in jurisdictions we support. Services are not offered to residents or entities in Mainland China."
+      },
+      {
+        "title": "Risks",
+        "body": "Digital assets involve risks, including value deviation from the reference currency and irreversible transactions. Please read the risk notice on our Security & Compliance page."
+      },
+      {
+        "title": "Intellectual property",
+        "body": "The Quick Come name, logo and website content belong to us. You may not use them without our permission."
+      },
+      {
+        "title": "Liability",
+        "body": "We provide this website \"as is\" and are not liable for decisions made based on its content, to the extent permitted by law."
+      },
+      {
+        "title": "Contact",
+        "body": "Questions about these terms? Contact sales@quickcomepay.com."
+      }
+    ]
+  }
+}

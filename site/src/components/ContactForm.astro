@@ -1,0 +1,212 @@
+---
+import { t, href, type Lang } from '../lib/i18n';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const f = t(lang).contact.form;
+const opt = `(${f.optional})`;
+---
+<form class="lead-form card" data-lead-form data-lang={lang} data-messages={JSON.stringify(f.errors)} novalidate>
+  <div class="form-alert" role="alert" data-form-alert hidden></div>
+
+  <div class="row">
+    <div class="field">
+      <label for="f-name">{f.name}</label>
+      <input id="f-name" name="name" type="text" autocomplete="name" required maxlength="100" />
+      <p class="error" id="f-name-err" data-error-for="name"></p>
+    </div>
+    <div class="field">
+      <label for="f-company">{f.company}</label>
+      <input id="f-company" name="company" type="text" autocomplete="organization" required maxlength="150" />
+      <p class="error" id="f-company-err" data-error-for="company"></p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="f-email">{f.email}</label>
+      <input id="f-email" name="email" type="email" autocomplete="email" required maxlength="254" />
+      <p class="error" id="f-email-err" data-error-for="email"></p>
+    </div>
+    <div class="field">
+      <label for="f-country">{f.country}</label>
+      <input id="f-country" name="country" type="text" autocomplete="country-name" required minlength="2" maxlength="100" />
+      <p class="error" id="f-country-err" data-error-for="country"></p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="field">
+      <label for="f-industry">{f.industry}</label>
+      <select id="f-industry" name="industry" required>
+        <option value="">{f.industryPlaceholder}</option>
+        {Object.entries(f.industries).map(([v, label]) => <option value={v}>{label}</option>)}
+      </select>
+      <p class="error" id="f-industry-err" data-error-for="industry"></p>
+    </div>
+    <div class="field">
+      <label for="f-volume">{f.volume} <span class="opt">{opt}</span></label>
+      <select id="f-volume" name="volume">
+        <option value="">{f.volumePlaceholder}</option>
+        {Object.entries(f.volumes).map(([v, label]) => <option value={v}>{label}</option>)}
+      </select>
+      <p class="error" id="f-volume-err" data-error-for="volume"></p>
+    </div>
+  </div>
+  <div class="field">
+    <label for="f-phone">{f.phone} <span class="opt">{opt}</span></label>
+    <input id="f-phone" name="phone" type="tel" autocomplete="tel" maxlength="40" pattern="[0-9+\-() ]*" />
+    <p class="error" id="f-phone-err" data-error-for="phone"></p>
+  </div>
+  <div class="field">
+    <label for="f-message">{f.message} <span class="opt">{opt}</span></label>
+    <textarea id="f-message" name="message" rows="4" maxlength="2000"></textarea>
+    <p class="error" id="f-message-err" data-error-for="message"></p>
+  </div>
+
+  <!-- 蜜罐字段：真人看不到，机器人往往会填写 -->
+  <div class="hp" aria-hidden="true">
+    <label for="f-website">{f.website}</label>
+    <input id="f-website" name="website" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
+  <div class="field consent">
+    <label class="check">
+      <input id="f-consent" name="consent" type="checkbox" required />
+      <span>{f.consentBefore} <a href={href(lang, 'privacy')} target="_blank" rel="noopener">{f.consentLink}</a>{f.consentAfter}</span>
+    </label>
+    <p class="error" id="f-consent-err" data-error-for="consent"></p>
+  </div>
+
+  <button class="btn btn-primary submit" type="submit" data-submit data-label={f.submit} data-busy={f.submitting}>{f.submit}</button>
+</form>
+
+<div class="lead-success card" data-lead-success tabindex="-1" hidden>
+  <h2>{f.successTitle}</h2>
+  <p>{f.successBody}</p>
+</div>
+
+<style>
+  .lead-form { display: grid; gap: 18px; }
+  .row { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+  .field { display: grid; gap: 6px; }
+  label { font-weight: 600; font-size: 0.95rem; }
+  .opt { font-weight: 400; color: var(--text-muted); }
+  input:not([type='checkbox']), select, textarea {
+    width: 100%; font: inherit; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; min-height: 44px;
+  }
+  textarea { resize: vertical; }
+  [aria-invalid='true'] { border-color: var(--danger) !important; }
+  .error { color: var(--danger); font-size: 0.875rem; margin: 0; min-height: 0; }
+  .error:empty { display: none; }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+  .check input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--emerald-strong); }
+  .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  .form-alert { background: rgba(201, 42, 42, 0.1); color: var(--danger); border-radius: 8px; padding: 12px 14px; }
+  .submit { justify-self: start; }
+  .lead-success h2 { color: var(--accent); }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-lead-form]');
+  if (form) {
+    const msgs = JSON.parse(form.dataset.messages || '{}');
+    const alertBox = form.querySelector<HTMLElement>('[data-form-alert]')!;
+    const button = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const success = document.querySelector<HTMLElement>('[data-lead-success]')!;
+    const FIELDS = ['name', 'company', 'email', 'country', 'industry', 'volume', 'phone', 'message', 'consent'];
+
+    const setError = (name: string, code: string | null) => {
+      const el = form.elements.namedItem(name) as HTMLInputElement | null;
+      const out = form.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
+      if (!el || !out) return;
+      const text = code ? msgs[code] || msgs.required : '';
+      out.textContent = text;
+      if (text) {
+        el.setAttribute('aria-invalid', 'true');
+        el.setAttribute('aria-describedby', out.id);
+      } else {
+        el.removeAttribute('aria-invalid');
+        el.removeAttribute('aria-describedby');
+      }
+    };
+
+    // 把浏览器原生校验结果映射成我们自己的提示文案
+    const clientCode = (el: HTMLInputElement): string | null => {
+      const v = el.validity;
+      if (v.valid) return null;
+      if (el.name === 'consent') return 'consent';
+      if (v.valueMissing) return 'required';
+      if (v.typeMismatch && el.name === 'email') return 'email';
+      if (v.patternMismatch && el.name === 'phone') return 'phone';
+      if (v.tooShort || v.tooLong) return 'length';
+      return 'required';
+    };
+    // 服务端返回的错误码映射成提示文案
+    const serverCode = (field: string, code: string) =>
+      field === 'consent' ? 'consent' : code === 'format' ? (field === 'phone' ? 'phone' : 'email') : code === 'length' ? 'length' : 'required';
+
+    const showAlert = (text: string) => {
+      alertBox.textContent = text;
+      alertBox.hidden = !text;
+    };
+    const focusFirstInvalid = () => form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+
+    form.addEventListener('input', (e) => {
+      const el = e.target as HTMLInputElement;
+      if (el.getAttribute('aria-invalid') === 'true') setError(el.name, clientCode(el));
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showAlert('');
+      let bad = false;
+      for (const name of FIELDS) {
+        const el = form.elements.namedItem(name) as HTMLInputElement;
+        const code = clientCode(el);
+        setError(name, code);
+        if (code) bad = true;
+      }
+      if (bad) {
+        showAlert(msgs.summary);
+        focusFirstInvalid();
+        return;
+      }
+
+      const fd = new FormData(form);
+      const payload: Record<string, unknown> = { lang: form.dataset.lang };
+      for (const [k, v] of fd.entries()) if (k !== 'consent') payload[k] = String(v);
+      payload.consent = (form.elements.namedItem('consent') as HTMLInputElement).checked;
+
+      button.disabled = true;
+      button.textContent = button.dataset.busy || '';
+      try {
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.status === 201) {
+          form.hidden = true;
+          success.hidden = false;
+          success.focus();
+          return;
+        }
+        if (res.status === 400) {
+          const j = await res.json().catch(() => ({}));
+          if (j.fields) {
+            for (const [field, code] of Object.entries(j.fields)) setError(field, serverCode(field, String(code)));
+            showAlert(msgs.summary);
+            focusFirstInvalid();
+            return;
+          }
+        }
+        showAlert(res.status === 429 ? msgs.rate : msgs.server);
+      } catch {
+        showAlert(msgs.network);
+      } finally {
+        button.disabled = false;
+        button.textContent = button.dataset.label || '';
+      }
+    });
+  }
+</script>

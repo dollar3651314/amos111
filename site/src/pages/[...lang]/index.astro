@@ -1,0 +1,160 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CtaBand from '../../components/CtaBand.astro';
+import { t, href, langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const d = t(lang);
+const h = d.home;
+---
+<Layout lang={lang} page="home" title={d.pages.home.title} description={d.pages.home.description}>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <span class="eyebrow">{h.eyebrow}</span>
+        <h1>{h.heroTitle}</h1>
+        <p class="lead">{h.heroBody}</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href={href(lang, 'contact')} data-cta>{h.heroPrimary}</a>
+          <a class="btn btn-outline" href={href(lang, 'how')}>{h.heroSecondary}</a>
+        </div>
+        <ul class="hero-points">
+          {h.heroPoints.map((p) => <li>{p}</li>)}
+        </ul>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="pay-card">
+          <div class="pc-top"><span class="dot"></span> {h.visual.received}</div>
+          <div class="pc-amount">12,500.00 <small>USDT</small></div>
+          <dl>
+            <div><dt>{h.visual.order}</dt><dd>PO-2026-0418</dd></div>
+            <div><dt>{h.visual.network}</dt><dd>TRON</dd></div>
+            <div><dt>{h.visual.status}</dt><dd class="ok">{h.visual.confirmed}</dd></div>
+          </dl>
+        </div>
+        <div class="pay-card small">
+          <div class="pc-top"><span class="dot"></span> {h.visual.received}</div>
+          <div class="pc-amount">8,200.00 <small>USDC</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-head"><h2>{h.featuresTitle}</h2></div>
+      <div class="grid grid-4">
+        {h.features.map((f, i) => (
+          <div class="card">
+            <span class="num">{i + 1}</span>
+            <h3>{f.title}</h3>
+            <p class="muted">{f.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section soft">
+    <div class="container">
+      <div class="section-head"><h2>{h.compareTitle}</h2></div>
+      <div class="table-wrap compare">
+        <table>
+          <thead><tr>{h.compareHeaders.map((c, i) => <th scope="col">{i === 0 ? <span class="sr-only">-</span> : c}</th>)}</tr></thead>
+          <tbody>
+            {h.compareRows.map((r) => (
+              <tr><th scope="row">{r[0]}</th><td data-label={h.compareHeaders[1]}>{r[1]}</td><td class="qc" data-label={h.compareHeaders[2]}>{r[2]}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-head"><h2>{h.stepsTitle}</h2></div>
+      <ol class="grid grid-4 steps">
+        {h.steps.map((s, i) => (
+          <li class="card"><span class="num">{i + 1}</span><h3>{s.title}</h3><p class="muted">{s.body}</p></li>
+        ))}
+      </ol>
+      <p class="more"><a class="text-link" href={href(lang, 'how')}>{h.stepsLink}</a></p>
+    </div>
+  </section>
+
+  <section class="section soft">
+    <div class="container">
+      <div class="section-head"><h2>{h.industriesTitle}</h2></div>
+      <div class="grid grid-3">
+        {d.solutions.items.map((it) => (
+          <a class="card industry" href={href(lang, 'solutions', it.id)}>
+            <h3>{it.name}</h3>
+            <p class="muted">{it.summary}</p>
+            <span class="text-link">{h.industriesLink}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container trust">
+      <div>
+        <h2>{h.trustTitle}</h2>
+        <p><a class="text-link" href={href(lang, 'security')}>{h.trustLink}</a></p>
+      </div>
+      <ul class="check-list">{h.trust.map((x) => <li>{x}</li>)}</ul>
+    </div>
+  </section>
+
+  <CtaBand lang={lang} />
+</Layout>
+
+<style>
+  .hero { background: var(--hero-bg); color: var(--hero-text); padding: 80px 0 88px; overflow: hidden; }
+  .hero-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 48px; align-items: center; }
+  .hero .lead { color: var(--hero-muted); }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 24px; }
+  .hero .btn-primary { background: var(--emerald); color: #062017; }
+  .hero-points { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; padding: 0; margin: 0; color: var(--hero-muted); font-size: 0.95rem; }
+  .hero-points li::before { content: '✓ '; color: var(--emerald); font-weight: 700; }
+  .hero-visual { position: relative; min-height: 320px; }
+  .pay-card {
+    position: relative; z-index: 1; background: #ffffff; color: #0b1f3a;
+    border-radius: 16px; padding: 24px; max-width: 360px; margin-left: auto;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  }
+  .pay-card.small { position: absolute; left: 0; bottom: 0; z-index: 2; max-width: 240px; padding: 16px 20px; }
+  .pc-top { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #5b6b7f; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #12b886; box-shadow: 0 0 0 4px rgba(18, 184, 134, 0.2); }
+  .pc-amount { font-size: 2rem; font-weight: 800; margin: 8px 0 16px; letter-spacing: -0.02em; }
+  .small .pc-amount { font-size: 1.4rem; margin-bottom: 0; }
+  .pc-amount small { font-size: 0.9rem; color: #5b6b7f; font-weight: 600; }
+  .pay-card dl { margin: 0; display: grid; gap: 8px; }
+  .pay-card dl div { display: flex; justify-content: space-between; border-top: 1px solid #e3e8ef; padding-top: 8px; font-size: 0.9rem; }
+  .pay-card dt { color: #5b6b7f; }
+  .pay-card dd { margin: 0; font-weight: 600; }
+  .pay-card .ok { color: #0a8f68; }
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .more { margin-top: 24px; }
+  .industry { text-decoration: none; color: inherit; transition: transform 0.15s, border-color 0.15s; }
+  .industry:hover { border-color: var(--emerald); transform: translateY(-2px); }
+  .industry h3 { color: var(--text); }
+  .trust { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  @media (max-width: 640px) {
+    .compare { border: 0; background: transparent; overflow: visible; }
+    .compare table { min-width: 0; }
+    .compare thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .compare tr { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; padding: 6px 0; }
+    .compare th, .compare td { display: block; border: 0; padding: 6px 16px; }
+    .compare td::before { content: attr(data-label); display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+  }
+  @media (max-width: 860px) {
+    .hero { padding: 56px 0 64px; }
+    .hero-grid, .trust { grid-template-columns: 1fr; }
+    .hero-visual { min-height: 260px; }
+    .pay-card { margin: 0 0 0 auto; max-width: 300px; }
+  }
+</style>
