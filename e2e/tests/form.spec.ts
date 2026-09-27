@@ -85,23 +85,23 @@ test('TC-15 F3 服务端返回 429 / 500 / 网络失败时显示明确提示，�
   await page.goto('/contact/');
   await fillValid(page, 'en', 'Retry Co');
   for (const [status, text] of [[429, 'Too many requests'], [500, 'Something went wrong']] as const) {
-    await page.route('**/api/leads', (r) => r.fulfill({ status, body: '{}' }));
+    await page.route('**/api/leads/', (r) => r.fulfill({ status, body: '{}' }));
     await page.click('[data-submit]');
     await expect(page.locator('[data-form-alert]')).toContainText(text);
     await expect(page.locator('[data-submit]')).toBeEnabled();
-    await page.unroute('**/api/leads');
+    await page.unroute('**/api/leads/');
   }
-  await page.route('**/api/leads', (r) => r.abort());
+  await page.route('**/api/leads/', (r) => r.abort());
   await page.click('[data-submit]');
   await expect(page.locator('[data-form-alert]')).toContainText('could not send');
-  await page.unroute('**/api/leads');
+  await page.unroute('**/api/leads/');
 });
 
 // TC-16 (AC5) 服务端字段错误能显示到对应字段旁（模拟前端校验被绕过的情况）
 test('TC-16 AC5 服务端字段错误映射到字段提示', async ({ page }) => {
   await page.goto('/contact/');
   await fillValid(page, 'en', 'Server Err Co');
-  await page.route('**/api/leads', (r) =>
+  await page.route('**/api/leads/', (r) =>
     r.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'validation', fields: { email: 'format' } }) }));
   await page.click('[data-submit]');
   await expect(page.locator('[data-error-for="email"]')).toContainText('valid email');

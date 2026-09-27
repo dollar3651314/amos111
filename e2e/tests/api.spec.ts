@@ -15,19 +15,19 @@ test('TC-17 AC5 绕过前端直接提交非法数据被服务端拒绝', async (
   ];
   const before = readJsonl(resolve(DATA_MAIN, 'leads.jsonl')).length;
   for (const [body, field] of cases) {
-    const r = await request.post('/api/leads', { data: body });
+    const r = await request.post('/api/leads/', { data: body });
     expect(r.status(), JSON.stringify(body)).toBe(400);
     expect((await r.json()).fields[field]).toBeTruthy();
   }
   expect(readJsonl(resolve(DATA_MAIN, 'leads.jsonl')).length).toBe(before);
-  const r2 = await request.post('/api/leads', { headers: { 'content-type': 'text/plain' }, data: 'hello' });
+  const r2 = await request.post('/api/leads/', { headers: { 'content-type': 'text/plain' }, data: 'hello' });
   expect(r2.status()).toBe(415);
 });
 
 // TC-18 (AC7) 同一 IP 10 分钟内第 6 次提交被拒绝（默认配置的实例，端口 3002）
 // v2：访客 IP 由平台层写入（与 Vercel 相同），访客自己伪造的 x-real-ip 请求头不能绕过限流
 test('TC-18 AC7 同一 IP 第 6 次提交返回 429，伪造 IP 请求头也无法绕过', async ({ request }) => {
-  const url = 'http://127.0.0.1:3002/api/leads';
+  const url = 'http://127.0.0.1:3002/api/leads/';
   for (let i = 1; i <= 5; i++) {
     const r = await request.post(url, { data: valid });
     expect(r.status(), `第 ${i} 次`).toBe(201);
@@ -44,7 +44,7 @@ test('TC-18 AC7 同一 IP 第 6 次提交返回 429，伪造 IP 请求头也无�
 test('TC-19 AC7 触发蜜罐的提交不会被保存', async ({ request }) => {
   const file = resolve(DATA_MAIN, 'leads.jsonl');
   const before = readJsonl(file).length;
-  const r = await request.post('/api/leads', { data: { ...valid, website: 'http://spam.example' } });
+  const r = await request.post('/api/leads/', { data: { ...valid, website: 'http://spam.example' } });
   expect(r.status()).toBe(201);
   await new Promise((res) => setTimeout(res, 300));
   expect(readJsonl(file).length).toBe(before);
@@ -52,6 +52,22 @@ test('TC-19 AC7 触发蜜罐的提交不会被保存', async ({ request }) => {
 
 // TC-20 补充：请求体大小限制（v2 由函数自身限制为 16KB）
 test('TC-20 补充 超大请求体被拒绝（413）', async ({ request }) => {
-  const r = await request.post('/api/leads', { data: { ...valid, message: 'x'.repeat(40 * 1024) } });
+  const r = await request.post('/api/leads/', { data: { ...valid, message: 'x'.repeat(40 * 1024) } });
   expect(r.status()).toBe(413);
+});
+
+// TC-24 补充（BUG-05 回归）：与 Vercel 的 trailingSlash 行为一致；前端请求的接口地址不会触发跳转
+test('TC-24 补充 不带尾斜杠的接口地址 308 跳转；表单直接请求带斜杠的地址', async ({ request, page }) => {
+  const r = await request.post('/api/leads', { data: {}, maxRedirects: 0 });
+  expect(r.status()).toBe(308);
+  expect(r.headers()['location']).toBe('/api/leads/');
+  const redirects: string[] = [];
+  page.on('response', (res) => res.status() >= 300 && res.status() < 400 && redirects.push(res.url()));
+  await page.goto('/contact/');
+  await page.route('**/api/leads/', (route) => route.fulfill({ status: 201, body: '{"ok":true}' }));
+  await page.fill('#f-name', 'A'); await page.fill('#f-company', 'B'); await page.fill('#f-email', 'a@b.com');
+  await page.fill('#f-country', 'Vietnam'); await page.selectOption('#f-industry', 'export'); await page.check('#f-consent');
+  await page.click('[data-submit]');
+  await expect(page.locator('[data-lead-success]')).toBeVisible();
+  expect(redirects).toEqual([]);
 });

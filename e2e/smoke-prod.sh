@@ -16,16 +16,16 @@ for p in / /solutions/ /how-it-works/ /security/ /about/ /contact/ /privacy/ /te
 done
 check "不存在的页面返回 404" "[ \"\$(code '$BASE/no-such-page/')\" = 404 ]"
 check "sitemap.xml、robots.txt 可访问" "[ \"\$(code '$BASE/sitemap.xml')\" = 200 ] && [ \"\$(code '$BASE/robots.txt')\" = 200 ]"
-check "/api/health：存储和邮件都已配置" "curl -fsS --max-time 10 '$BASE/api/health' | grep -q '\"ok\":true'"
+check "/api/health：存储和邮件都已配置" "curl -fsS --max-time 10 '$BASE/api/health/' | grep -q '\"ok\":true'"
 check "HTTP 自动跳转 HTTPS（301 或 308）" "[[ \"\$(code 'http://$HOST/')\" =~ ^30[18]$ ]]"
 check "响应头包含 HSTS 和 CSP" "h=\$(curl -sI --max-time 10 '$BASE/'); echo \"\$h\" | grep -qi '^strict-transport-security' && echo \"\$h\" | grep -qi '^content-security-policy'"
 check "生产环境没有原型标识" "! curl -s --max-time 10 '$BASE/' | grep -q 'data-prototype-banner'"
-check "非法提交被服务端拒绝（400）" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads')\" = 400 ]"
+check "非法提交被服务端拒绝（400）" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads/')\" = 400 ]"
 check "证书有效且剩余天数 > 14 天" "echo | openssl s_client -servername '$HOST' -connect '$HOST:443' 2>/dev/null | openssl x509 -noout -checkend 1209600 >/dev/null"
 
 if [ "${2:-}" = "--ratelimit" ]; then
   # 上面已经发过 1 次非法请求；再发 4 次，凑满 5 次，第 6 次应该返回 429
-  for i in 1 2 3 4; do code -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/leads" >/dev/null; done
-  check "限流：同一 IP 第 6 次提交返回 429" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads')\" = 429 ]"
+  for i in 1 2 3 4; do code -X POST -H 'content-type: application/json' -d '{}' "$BASE/api/leads/" >/dev/null; done
+  check "限流：同一 IP 第 6 次提交返回 429" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads/')\" = 429 ]"
 fi
 exit $fail

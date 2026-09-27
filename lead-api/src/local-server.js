@@ -67,11 +67,15 @@ http
     const path = decodeURIComponent(url.pathname);
     const extra = headersFor(path, req.headers.host);
     try {
-      if (path === '/api/leads') {
+      // 与 Vercel 的 trailingSlash: true 一致：没有尾斜杠、也没有扩展名的地址，一律 308 跳转到带斜杠的地址（包括 /api）
+      if (!path.endsWith('/') && !extname(path)) {
+        return sendResponse(res, new Response(null, { status: 308, headers: { location: path + '/' + url.search } }), extra);
+      }
+      if (path === '/api/leads/') {
         if (req.method !== 'POST') return sendResponse(res, new Response(null, { status: 405, headers: { allow: 'POST' } }), extra);
         return sendResponse(res, await handle(await toRequest(req)), extra);
       }
-      if (path === '/api/health') return sendResponse(res, Response.json({ ok: true }), extra);
+      if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true }), extra);
 
       let file = join(SITE, path);
       if (!file.startsWith(SITE)) throw new Error('bad path');
