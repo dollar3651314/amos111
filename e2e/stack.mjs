@@ -1,8 +1,8 @@
-// 测试环境：模拟 SMTP 服务器 + 两个 lead-api 实例 + 真实 Nginx（使用 deploy/nginx 下的生产配置片段）
-// 端口：8080 Nginx（入口）、3001 lead-api（主实例，放宽限流，经 Nginx 访问）、
-//       3002 lead-api（默认限流配置，专门用来验证 AC7）、2525 SMTP
+// 测试环境（v2）：模拟 SMTP 服务器 + 两个本地服务器实例（lead-api/src/local-server.js，模拟 Vercel 的行为：
+// 提供静态文件、按 vercel.json 输出响应头、由平台层写入 x-real-ip，/api 使用与生产相同的 handler）
+// 端口：8080 主实例（放宽限流）、3002 默认限流配置实例（专门用来验证 AC7）、2525 SMTP
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SMTPServer } from 'smtp-server';
@@ -13,6 +13,8 @@ export const TMP = resolve(HERE, '.tmp');
 export const MAILS = resolve(TMP, 'mails.jsonl');
 export const DATA_MAIN = resolve(TMP, 'data-main');
 export const DATA_RL = resolve(TMP, 'data-ratelimit');
+export const DATA_PROTO = resolve(TMP, 'data-prototype');
+export const PROTO_DIST = resolve(TMP, 'proto-dist');
 const children = [];
 
 async function waitFor(url, tries = 50) {
@@ -23,18 +25,18 @@ async function waitFor(url, tries = 50) {
   throw new Error(`timeout waiting for ${url}`);
 }
 
-function startLeadApi(port, dataDir, extraEnv = {}) {
-  const p = spawn(process.execPath, ['src/index.js'], {
-    cwd: resolve(ROOT, 'lead-api'),
+function startLocal(port, dataDir, extraEnv = {}) {
+  const p = spawn(process.execPath, ['lead-api/src/local-server.js'], {
+    cwd: ROOT,
     env: {
-      ...process.env, PORT: String(port), HOST: '127.0.0.1', DATA_DIR: dataDir, TRUST_PROXY: '1',
-      SMTP_HOST: '127.0.0.1', SMTP_PORT: '2525', SMTP_SECURE: '0',
+      ...process.env, PORT: String(port), DATA_DIR: dataDir,
+      SMTP_HOST: '127.0.0.1', SMTP_PORT: '2525', SMTP_SECURE: '0', RESEND_API_KEY: '',
       MAIL_FROM: 'Quick Come Website <no-reply@quickcomepay.test>', MAIL_TO: 'sales@quickcomepay.test',
       ...extraEnv,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  const log = resolve(TMP, `lead-api-${port}.log`);
+  const log = resolve(TMP, `local-${port}.log`);
   p.stdout.on('data', (d) => appendFileSync(log, d));
   p.stderr.on('data', (d) => appendFileSync(log, d));
   children.push(p);
@@ -59,39 +61,16 @@ export async function start() {
   });
   await new Promise((r) => smtp.listen(2525, '127.0.0.1', r));
 
-  startLeadApi(3001, DATA_MAIN, { RATE_LIMIT_MAX: '1000' });
-  startLeadApi(3002, DATA_RL); // 默认配置：10 分钟 5 次
+  startLocal(8080, DATA_MAIN, { RATE_LIMIT_MAX: '1000' });
+  startLocal(3002, DATA_RL); // 默认配置：10 分钟 5 次
 
-  const nginxConf = `
-worker_processes 1;
-pid ${TMP}/nginx.pid;
-error_log ${TMP}/nginx-error.log warn;
-events {}
-http {
-  include /etc/nginx/mime.types;
-  default_type application/octet-stream;
-  access_log ${TMP}/nginx-access.log;
-  client_body_temp_path ${TMP}/nginx-body;
-  proxy_temp_path ${TMP}/nginx-proxy;
-  include ${ROOT}/deploy/nginx/quickcome-http.conf;
-  server {
-    listen 127.0.0.1:8080;
-    server_name localhost;
-    root ${ROOT}/site/dist;
-    include ${ROOT}/deploy/nginx/quickcome-site.conf;
-  }
-}`;
-  writeFileSync(resolve(TMP, 'nginx.conf'), nginxConf);
-  execFileSync('nginx', ['-t', '-c', resolve(TMP, 'nginx.conf')], { stdio: 'pipe' });
-  execFileSync('nginx', ['-c', resolve(TMP, 'nginx.conf')]);
+  // AC13：用原型模式另外构建一份（与 Vercel 预览环境相同），放在 8090 端口
+  execFileSync(process.execPath, [resolve(ROOT, 'site/node_modules/astro/bin/astro.mjs'), 'build', '--outDir', PROTO_DIST],
+    { cwd: resolve(ROOT, 'site'), env: { ...process.env, PROTOTYPE: '1' }, stdio: 'pipe' });
+  startLocal(8090, DATA_PROTO, { SITE_DIR: PROTO_DIST });
 
-  await Promise.all([
-    waitFor('http://127.0.0.1:3001/api/health'),
-    waitFor('http://127.0.0.1:3002/api/health'),
-    waitFor('http://127.0.0.1:8080/api/health'),
-  ]);
+  await Promise.all([waitFor('http://127.0.0.1:8080/api/health'), waitFor('http://127.0.0.1:3002/api/health'), waitFor('http://127.0.0.1:8090/api/health')]);
   return async () => {
-    try { execFileSync('nginx', ['-c', resolve(TMP, 'nginx.conf'), '-s', 'stop']); } catch {}
     for (const c of children) c.kill('SIGTERM');
     await new Promise((r) => smtp.close(r));
   };

@@ -1,6 +1,0 @@
-[Unit]
-Description=Encrypted daily backup of Quick Come leads
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/quickcome-backup-leads.sh

@@ -2,7 +2,7 @@
 本仓库由四个角色协作产出：产品经理、研发工程师、测试工程师、运维工程师。角色和协作规则见 `agents` 仓库。
 
 ## 一图看懂
-**本仓库的文档怎么读，代码目录各由谁负责。** 建议从《交付说明》开始读，里面有全景图和最终效果截图。
+**本仓库的文档怎么读，代码目录各由谁负责。** 建议从最新的《交付说明》（v2）开始读，里面有全景图和最终效果截图。
 
 ```mermaid
 flowchart LR
@@ -13,7 +13,7 @@ flowchart LR
     subgraph CODE["代码（目录 → 负责角色）"]
         C1["site/ → 研发"]
         C2["lead-api/ → 研发"]
-        C3["deploy/ → 运维"]
+        C3["api/ + vercel.json → 研发、运维"]
         C4["e2e/ → 测试"]
         C5["assets/ → 效果图与截图"]
     end
@@ -30,11 +30,13 @@ flowchart LR
 | 测试 | `测试报告/v1-测试报告.md` |
 | 部署 | `部署方案/v1-部署方案.md` |
 | 交付 | `交付记录/v1-交付说明.md` |
+| **v2：改为 Vercel 部署** | `需求文档/v2-需求说明书.md` → `00-架构方案.md`（文末的 v2 部分）→ `技术方案/v2-原型说明.md` → `需求文档/v2-任务清单.md` → `技术方案/v2-技术方案.md` → `测试报告/v2-测试报告.md` → `部署方案/v2-部署方案.md` → `交付记录/v2-交付说明.md` |
 
 ## 代码
 | 目录 | 内容 | 常用命令 |
 |---|---|---|
 | `site/` | 官网，Astro 静态站点 | `npm ci && npm run build` |
-| `lead-api/` | 表单服务 | `npm ci && npm test` |
-| `deploy/` | 部署配置和脚本 | 用法见《部署方案》 |
-| `e2e/` | 验收测试 | 先构建 `site/`，再执行 `npm ci && npx playwright test`；Lighthouse 检测用 `node lighthouse.mjs`（需要 Nginx） |
+| `api/` | Vercel Functions（生产环境的表单接口） | 由 Vercel 自动部署 |
+| `lead-api/` | 表单处理逻辑、存储、限流、发信，以及本地服务器 | 在根目录执行：`npm ci && npm test`；本地运行：`npm run dev:local` |
+| `vercel.json` | Vercel 的构建、响应头、函数地域 | 用法见《部署方案 v2》 |
+| `e2e/` | 验收测试 | 先在根目录执行 `npm ci`、构建 `site/`，再执行 `npm ci && npx playwright test`；Lighthouse 检测用 `node lighthouse.mjs`；线上冒烟测试用 `bash smoke-prod.sh <地址>` |
