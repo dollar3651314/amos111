@@ -117,14 +117,36 @@ test('TC-08 补充 不存在的页面返回 404 页面', async ({ request }) => 
   expect(await r.text()).toContain('Page not found');
 });
 
-test('TC-08 补充 安全响应头齐全', async ({ request }) => {
-  const r = await request.get('/');
-  const h = r.headers();
-  expect(h['content-security-policy']).toContain("script-src 'self'");
-  expect(h['x-frame-options']).toBe('DENY');
-  expect(h['x-content-type-options']).toBe('nosniff');
-  expect(h['referrer-policy']).toBeTruthy();
-  expect(h['server']).not.toMatch(/\d/); // 不暴露 Nginx 版本号
+test('TC-08 补充 安全响应头齐全（按 vercel.json；严格 CSP 和 HSTS 只对生产域名生效）', async ({ request }) => {
+  const any = (await request.get('/')).headers();
+  expect(any['x-frame-options']).toBe('DENY');
+  expect(any['x-content-type-options']).toBe('nosniff');
+  expect(any['referrer-policy']).toBeTruthy();
+  expect(any['content-security-policy'], '非生产域名不应下发严格 CSP（避免拦截 Vercel 预览工具栏）').toBeUndefined();
+  const prod = (await request.get('/', { headers: { host: 'quickcomepay.com' } })).headers();
+  expect(prod['content-security-policy']).toContain("script-src 'self'");
+  expect(prod['strict-transport-security']).toContain('max-age=31536000');
+  const asset = (await request.get('/favicon.svg')).headers();
+  expect(asset['x-frame-options']).toBe('DENY');
+});
+
+// TC-08b 补充：生产环境启用了严格 CSP（禁止内联脚本和内联样式），构建产物必须与之兼容
+test('TC-08b 补充 构建产物中没有内联脚本、内联样式和 style 属性（与严格 CSP 兼容）', async () => {
+  const { readdirSync, readFileSync, statSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const dist = join(process.cwd(), '..', 'site', 'dist');
+  const walk = (d: string): string[] => readdirSync(d).flatMap((f) => {
+    const p = join(d, f);
+    return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') ? [p] : [];
+  });
+  const bad: string[] = [];
+  for (const f of walk(dist)) {
+    const html = readFileSync(f, 'utf8');
+    if (/<script(?![^>]*\ssrc=)[^>]*>/i.test(html)) bad.push(`${f}: 内联 <script>`);
+    if (/<style[\s>]/i.test(html)) bad.push(`${f}: 内联 <style>`);
+    if (/\sstyle="/i.test(html)) bad.push(`${f}: style 属性`);
+  }
+  expect(bad).toEqual([]);
 });
 
 for (const p of PAGES) {

@@ -1,0 +1,20 @@
+{
+  "name": "quickcome-functions",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Quick Come 官网的 Vercel Functions（api/）与表单服务代码（lead-api/）",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test lead-api/test/*.test.js",
+    "dev:local": "node lead-api/src/local-server.js"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
+    "@vercel/functions": "^3.9.9",
+    "nodemailer": "^10.0.11"
+  }
+}
