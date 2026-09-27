@@ -192,7 +192,8 @@ const opt = `(${f.optional})`;
           success.focus({ preventScroll: true });
           return;
         }
-        const res = await fetch('/api/leads', {
+        // vercel.json 开启了 trailingSlash，接口地址也要带尾斜杠，避免多一次 308 跳转（BUG-05）
+        const res = await fetch('/api/leads/', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(payload),

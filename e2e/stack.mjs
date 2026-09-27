@@ -69,7 +69,7 @@ export async function start() {
     { cwd: resolve(ROOT, 'site'), env: { ...process.env, PROTOTYPE: '1' }, stdio: 'pipe' });
   startLocal(8090, DATA_PROTO, { SITE_DIR: PROTO_DIST });
 
-  await Promise.all([waitFor('http://127.0.0.1:8080/api/health'), waitFor('http://127.0.0.1:3002/api/health'), waitFor('http://127.0.0.1:8090/api/health')]);
+  await Promise.all([waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/')]);
   return async () => {
     for (const c of children) c.kill('SIGTERM');
     await new Promise((r) => smtp.close(r));
