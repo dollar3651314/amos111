@@ -55,6 +55,11 @@ for (const lang of ['en', 'zh'] as const) {
     await page.click('[data-submit]');
     await expect(page.locator('[data-lead-success]')).toBeVisible();
     await expect(page.locator('[data-lead-form]')).toBeHidden();
+    // BUG-04 回归：成功提示的标题不能被顶部固定导航栏遮住（页面开启了平滑滚动，等滚动结束再测量）
+    await page.waitForTimeout(800);
+    const header = await page.locator('header.site-header').boundingBox();
+    const title = await page.locator('[data-lead-success] h2').boundingBox();
+    expect(title!.y, '成功提示标题被导航栏遮住').toBeGreaterThanOrEqual(header!.y + header!.height);
     await settle();
 
     expect(leadCount()).toBe(before + 1);
