@@ -1,6 +1,8 @@
 // 所有配置都从环境变量读取，敏感信息不进代码仓库。
 // 生产环境的变量在 Vercel 项目的 Environment Variables 里配置。
-export function loadConfig(env = process.env) {
+export function loadConfig(rawEnv = process.env) {
+  // 去掉首尾空白：从终端或密码管理器复制时，容易带上换行（v3 上线时 CRON_SECRET 就因此导致部署失败）
+  const env = new Proxy(rawEnv, { get: (o, k) => (typeof o[k] === 'string' ? o[k].trim() : o[k]) });
   const int = (v, d) => (v === undefined || v === '' ? d : Number.parseInt(v, 10));
   return {
     rateLimitMax: int(env.RATE_LIMIT_MAX, 5),

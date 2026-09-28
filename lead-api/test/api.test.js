@@ -24,3 +24,9 @@ test('api/leads 和 api/health：没有配置存储时安全失败', async () =>
     console.error = origError;
   }
 });
+
+test('配置：环境变量的首尾空白和换行会被去掉', async () => {
+  const { loadConfig } = await import('../src/config.js');
+  const c = loadConfig({ APP_SECRET: '  abc\n', CRON_SECRET: 'x\r\n', SMTP_HOST: ' smtp.qq.com ' });
+  assert.equal(c.appSecret, 'abc'); assert.equal(c.cronSecret, 'x'); assert.equal(c.smtp.host, 'smtp.qq.com');
+});
