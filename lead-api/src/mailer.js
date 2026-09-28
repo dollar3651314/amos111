@@ -12,6 +12,9 @@ const LABELS = {
   lang: 'Site language',
 };
 
+/** 测试环境发出的邮件，标题前面加上"[测试环境]"（agents v0.6 C34） */
+export const envSubject = (config, subject) => (config?.appEnv === 'staging' ? `[测试环境] ${subject}` : subject);
+
 export function formatLeadEmail(lead) {
   const lines = Object.entries(LABELS)
     .filter(([k]) => lead.data[k] !== undefined)
@@ -44,7 +47,7 @@ export function createRawSender(config, fetchImpl = fetch) {
       const res = await fetchImpl('https://api.resend.com/emails', {
         method: 'POST',
         headers: { authorization: `Bearer ${config.resendApiKey}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ from: config.mailFrom, to: [to], subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+        body: JSON.stringify({ from: config.mailFrom, to: [to], subject: envSubject(config, subject), text, ...(replyTo ? { reply_to: replyTo } : {}) }),
       });
       if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
     };
@@ -55,7 +58,7 @@ export function createRawSender(config, fetchImpl = fetch) {
     disableFileAccess: true, disableUrlAccess: true,
   });
   return async ({ to, subject, text, replyTo }) => {
-    await transport.sendMail({ from: config.mailFrom, to, subject, text, ...(replyTo ? { replyTo } : {}) });
+    await transport.sendMail({ from: config.mailFrom, to, subject: envSubject(config, subject), text, ...(replyTo ? { replyTo } : {}) });
   };
 }
 
@@ -66,7 +69,7 @@ export function createResendSender(config, fetchImpl = fetch) {
     const res = await fetchImpl('https://api.resend.com/emails', {
       method: 'POST',
       headers: { authorization: `Bearer ${config.resendApiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ from: config.mailFrom, to: [config.mailTo], reply_to: lead.data.email, subject, text }),
+      body: JSON.stringify({ from: config.mailFrom, to: [config.mailTo], reply_to: lead.data.email, subject: envSubject(config, subject), text }),
     });
     if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
   };
@@ -87,7 +90,7 @@ export function createSmtpSender(config) {
       from: config.mailFrom,
       to: config.mailTo,
       replyTo: lead.data.email,
-      subject,
+      subject: envSubject(config, subject),
       text,
     });
   };

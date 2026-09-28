@@ -3,7 +3,8 @@ import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import PrototypeBanner from '../components/PrototypeBanner.astro';
-import { IS_PROTOTYPE } from '../lib/env';
+import { IS_PROTOTYPE, IS_STAGING } from '../lib/env';
+import StagingBanner from '../components/StagingBanner.astro';
 import { t, href, HTML_LANG, type Lang, type PageKey } from '../lib/i18n';
 
 interface Props {
@@ -35,7 +36,7 @@ const ogImage = abs('/og-image.png');
         <link rel="alternate" hreflang="x-default" href={abs(href('en', page))} />
       </>
     )}
-    {(!page || IS_PROTOTYPE) && <meta name="robots" content="noindex" />}
+    {(!page || IS_PROTOTYPE || IS_STAGING) && <meta name="robots" content="noindex" />}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -53,6 +54,7 @@ const ogImage = abs('/og-image.png');
   <body>
     <a class="skip-link" href="#main">{lang === 'en' ? 'Skip to content' : '跳到正文'}</a>
     {IS_PROTOTYPE && <PrototypeBanner lang={lang} />}
+    {IS_STAGING && <StagingBanner lang={lang} />}
     <Header lang={lang} page={page} />
     <main id="main">
       <slot />

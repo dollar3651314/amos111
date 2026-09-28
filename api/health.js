@@ -10,8 +10,11 @@ export function GET() {
   const secret = c.appSecret.length >= 32;
   const blob = c.blobConfigured;
   const blobUpload = c.blobUploadToken; // 浏览器直传文件所需
-  const cron = Boolean(c.cronSecret);
+  // 测试环境没有定时任务（Vercel Cron 只在生产运行），不要求 CRON_SECRET
+  const cron = Boolean(c.cronSecret) || c.appEnv === 'staging';
   const mailMode = c.resendApiKey ? 'resend' : c.smtp.host ? 'smtp' : 'none';
   const ok = storage && mail && secret && blob && blobUpload && cron;
-  return json(ok ? 200 : 503, { ok, storage, mail, mailMode, secret, blob, blobUpload, cron });
+  // commit：当前部署的提交（前 7 位，仓库是公开的，不算敏感信息），测试环境的自动检查用它确认新版本已经部署
+  const commit = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
+  return json(ok ? 200 : 503, { ok, env: c.appEnv, commit, storage, mail, mailMode, secret, blob, blobUpload, cron });
 }

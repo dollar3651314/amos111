@@ -4,7 +4,8 @@ import '../styles/global.css';
 import '../styles/app.css';
 import Logo from '../components/Logo.astro';
 import PrototypeBanner from '../components/PrototypeBanner.astro';
-import { IS_PROTOTYPE } from '../lib/env';
+import { IS_PROTOTYPE, IS_STAGING } from '../lib/env';
+import StagingBanner from '../components/StagingBanner.astro';
 import { HTML_LANG, href, t, type Lang } from '../lib/i18n';
 interface Props {
   lang: Lang;
@@ -34,6 +35,7 @@ const d = t(lang);
   </head>
   <body class="app-body">
     {IS_PROTOTYPE && <PrototypeBanner lang={lang} />}
+    {IS_STAGING && <StagingBanner lang={lang} />}
     <header class="app-header">
       <div class="container bar">
         <a class="brand" href={href(lang, 'home')} aria-label={`QuickCome - ${d.nav.home}`}><Logo size={28} /></a>

@@ -15,6 +15,9 @@ export const DATA_MAIN = resolve(TMP, 'data-main');
 export const DATA_RL = resolve(TMP, 'data-ratelimit');
 export const DATA_PROTO = resolve(TMP, 'data-prototype');
 export const PROTO_DIST = resolve(TMP, 'proto-dist');
+// v5：测试环境（APP_ENV=staging）的构建，放在 8092 端口
+export const STAGING_DIST = resolve(TMP, 'staging-dist');
+export const DATA_STG = resolve(TMP, 'data-staging');
 // v3 开户（KYB）测试用的密钥：只用于本地测试
 export const KYB_ENV = { APP_SECRET: 'e2e-app-secret-e2e-app-secret-0123456789ab', ADMIN_SETUP_TOKEN: 'e2e-setup-token', CRON_SECRET: 'e2e-cron-secret' };
 const children = [];
@@ -70,8 +73,11 @@ export async function start() {
   execFileSync(process.execPath, [resolve(ROOT, 'site/node_modules/astro/bin/astro.mjs'), 'build', '--outDir', PROTO_DIST],
     { cwd: resolve(ROOT, 'site'), env: { ...process.env, PROTOTYPE: '1' }, stdio: 'pipe' });
   startLocal(8090, DATA_PROTO, { SITE_DIR: PROTO_DIST });
+  execFileSync(process.execPath, [resolve(ROOT, 'site/node_modules/astro/bin/astro.mjs'), 'build', '--outDir', STAGING_DIST],
+    { cwd: resolve(ROOT, 'site'), env: { ...process.env, APP_ENV: 'staging', VERCEL_ENV: 'preview' }, stdio: 'pipe' });
+  startLocal(8092, DATA_STG, { SITE_DIR: STAGING_DIST, APP_ENV: 'staging', RATE_LIMIT_MAX: '1000', ...KYB_ENV });
 
-  await Promise.all([waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/')]);
+  await Promise.all([waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/'), waitFor('http://127.0.0.1:8092/api/health/')]);
   return async () => {
     for (const c of children) c.kill('SIGTERM');
     await new Promise((r) => smtp.close(r));
