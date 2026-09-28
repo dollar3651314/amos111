@@ -17,7 +17,7 @@ export function kybDeps() {
   if (!config.redis.url || !config.redis.token) throw new Error('storage not configured');
   const keys = deriveKeys(config.appSecret);
   const redis = new Redis({ url: config.redis.url, token: config.redis.token });
-  const blobs = config.blobConfigured ? createVercelBlobs() : config.localBlobDir ? createLocalBlobs(config.localBlobDir) : null;
+  const blobs = config.blobConfigured ? createVercelBlobs({ token: config.blobToken }) : config.localBlobDir ? createLocalBlobs(config.localBlobDir) : null;
   const repo = createRepo({ redis, keys });
   const send = createRawSender(config);
   const getIp = (req) => ipAddress(req) || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '';

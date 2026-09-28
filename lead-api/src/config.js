@@ -29,6 +29,7 @@ export function loadConfig(rawEnv = process.env) {
     blobConfigured: Boolean(env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID),
     // 浏览器直传需要签发上传凭证，这一步只支持读写令牌（BLOB_READ_WRITE_TOKEN），不支持 OIDC
     blobUploadToken: Boolean(env.BLOB_READ_WRITE_TOKEN),
+    blobToken: env.BLOB_READ_WRITE_TOKEN || '',
     localBlobDir: env.LOCAL_BLOB_DIR || '',
     // 当前环境（agents v0.6 C34）：production / staging / preview / local
     appEnv: env.APP_ENV || env.VERCEL_ENV || 'local',
