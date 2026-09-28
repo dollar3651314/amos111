@@ -1,4 +1,4 @@
-// 审核后台的接口：/api/admin/<动作>/。除 setup-begin、setup-confirm、login、me 外，全部要求有效的会话（AC-K8）。
+// 审核后台的接口：/api/kyb/?g=admin&a=<动作>。除 setup-begin、setup-confirm、login、me 外，全部要求有效的会话（AC-K8）。
 import QRCode from 'qrcode';
 import { json, readJson, actionOf, originOf } from './http.js';
 import { encryptJson, decryptJson, safeEqual } from './crypto.js';

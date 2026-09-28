@@ -1,7 +1,8 @@
 // 审核后台的交互逻辑（v3）。
-// - 正式模式：通过 /api/admin/*（会话 Cookie；首次使用先初始化）。
+// - 正式模式：通过 /api/kyb/?g=admin&a=<动作>（会话 Cookie；首次使用先初始化）。
 // - 原型模式：使用内置的模拟数据（虚构），格式与真实接口相同，所有操作只改页面上的数据。
 import copy from '../i18n/onboarding.json';
+import { kybUrl } from './kyb-url';
 
 const C = copy.zh;
 const root = document.getElementById('admin-root')!;
@@ -42,7 +43,7 @@ function fmt(key: string, group: Record<string, any>): string {
 // ---------- 接口 ----------
 class ApiError extends Error { constructor(public status: number, public body: any) { super(body?.error || String(status)); } }
 async function call(path: string, body?: unknown) {
-  const res = await fetch(`/api/admin/${path}`, body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await fetch(kybUrl('admin', path), body === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && !['login/', 'me/'].includes(path)) { showView('login'); throw new ApiError(401, data); }
   if (!res.ok) throw new ApiError(res.status, data);
@@ -113,8 +114,8 @@ const A = PROTO
       decide: (b: any) => call('decide/', b),
       notes: (b: any) => call('notes/', b),
       delete: (b: any) => call('delete/', b),
-      fileUrl: (id: string, fileId: string) => `/api/admin/file/?id=${encodeURIComponent(id)}&fileId=${encodeURIComponent(fileId)}`,
-      sigUrl: (id: string) => `/api/admin/file/?id=${encodeURIComponent(id)}&sig=1&inline=1`,
+      fileUrl: (id: string, fileId: string) => kybUrl('admin', `file/?id=${encodeURIComponent(id)}&fileId=${encodeURIComponent(fileId)}`),
+      sigUrl: (id: string) => kybUrl('admin', `file/?id=${encodeURIComponent(id)}&sig=1&inline=1`),
     };
 
 // ---------- 视图 ----------

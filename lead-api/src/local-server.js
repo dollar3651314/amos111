@@ -98,13 +98,19 @@ http
         if (req.method !== 'POST') return sendResponse(res, new Response(null, { status: 405, headers: { allow: 'POST' } }), extra);
         return sendResponse(res, await handle(await toRequest(req)), extra);
       }
-      if (path.startsWith('/api/onboarding/')) return sendResponse(res, await kybOnboarding(await toRequest(req)), extra);
-      if (path.startsWith('/api/admin/')) return sendResponse(res, await kybAdmin(await toRequest(req)), extra);
+      // 与生产环境一致：开户接口只有 /api/kyb/?g=<分组>&a=<动作> 一个入口（api/kyb.js）
+      if (path === '/api/kyb/') {
+        const g = url.searchParams.get('g');
+        const h = g === 'admin' ? kybAdmin : g === 'onboarding' ? kybOnboarding : null;
+        return sendResponse(res, h ? await h(await toRequest(req)) : Response.json({ ok: false, error: 'not_found' }, { status: 404 }), extra);
+      }
       if (path === '/api/cron/cleanup/') {
         const ok = process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
         return sendResponse(res, ok ? Response.json({ ok: true, ...(await kybCleanup()) }) : Response.json({ ok: false }, { status: 401 }), extra);
       }
       if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true }), extra);
+      // api/ 下没有对应文件的地址，Vercel 返回 404；这里同样返回 404，避免本地能用、线上找不到（BUG-K7）
+      if (path.startsWith('/api/')) return sendResponse(res, new Response('NOT_FOUND', { status: 404 }), extra);
 
       let file = join(SITE, path);
       if (!file.startsWith(SITE)) throw new Error('bad path');

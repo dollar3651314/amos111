@@ -1,6 +1,8 @@
 // 开户填写页面的交互逻辑（v3）。
-// - 正式模式：通过 /api/onboarding/* 读写本人申请（令牌来自链接里的 ?t=）。
+// - 正式模式：通过 /api/kyb/?g=onboarding&a=<动作> 读写本人申请（令牌来自链接里的 ?t=）。
 // - 原型模式（Vercel 预览环境）：使用内置的模拟接口，不调用后端，也不发送任何数据。
+
+import { kybUrl } from './kyb-url';
 
 type Cfg = {
   prototype: boolean; lang: string; maxBytes: number;
@@ -45,7 +47,7 @@ const token = new URLSearchParams(location.search).get('t') || '';
 // ---------- 接口 ----------
 class ApiError extends Error { constructor(public status: number, public body: any) { super(body?.error || String(status)); } }
 async function call(path: string, init: RequestInit = {}) {
-  const res = await fetch(`/api/onboarding/${path}`, { ...init, headers: { 'x-kyb-token': token, ...(init.body && typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}), ...(init.headers || {}) } });
+  const res = await fetch(kybUrl('onboarding', path), { ...init, headers: { 'x-kyb-token': token, ...(init.body && typeof init.body === 'string' ? { 'content-type': 'application/json' } : {}), ...(init.headers || {}) } });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, body);
   return body;
@@ -61,7 +63,7 @@ const realApi = {
       const { upload } = await import('@vercel/blob/client');
       const safe = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'file';
       const r = await upload(`${uploadPrefix}${safe}`, file, {
-        access: 'private', handleUploadUrl: '/api/onboarding/upload/', contentType: file.type,
+        access: 'private', handleUploadUrl: kybUrl('onboarding', 'upload'), contentType: file.type,
         clientPayload: JSON.stringify({ token, doc, person: person || '' }),
         onUploadProgress: (e) => onProgress(Math.round(e.percentage)),
       });

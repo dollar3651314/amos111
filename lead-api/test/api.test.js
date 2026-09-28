@@ -16,8 +16,8 @@ test('api/leads 和 api/health：没有配置存储时安全失败', async () =>
     assert.equal(h.status, 503);
     assert.deepEqual(await h.json(), { ok: false, storage: false, mail: false, mailMode: 'none', secret: false, blob: false, blobUpload: false, cron: false });
     // v3：开户接口在没有配置时返回 503，不泄露任何信息
-    const ob = await import('../../api/onboarding/state.js');
-    const r2 = await ob.GET(new Request('http://x/api/onboarding/state/'));
+    const ob = await import('../../api/kyb.js');
+    const r2 = await ob.GET(new Request('http://x/api/kyb/?g=onboarding&a=state'));
     assert.equal(r2.status, 503);
     assert.deepEqual(await r2.json(), { ok: false, error: 'not_configured' });
   } finally {
@@ -31,16 +31,14 @@ test('配置：环境变量的首尾空白和换行会被去掉', async () => {
   assert.equal(c.appSecret, 'abc'); assert.equal(c.cronSecret, 'x'); assert.equal(c.smtp.host, 'smtp.qq.com');
 });
 
-test('接口入口：每个动作都有固定文件名的入口，没有多余文件，也没有 [xxx].js 动态文件名（BUG-K7）', async () => {
+test('接口入口：Vercel 函数不超过 12 个，没有 [xxx].js 动态文件名（BUG-K7、BUG-K8）', async () => {
   const { readdirSync } = await import('node:fs');
-  const { GROUPS } = await import('../scripts/gen-api-entries.mjs');
-  for (const [group, actions] of Object.entries(GROUPS)) {
-    const files = readdirSync(new URL(`../../api/${group}/`, import.meta.url)).map((f) => f.replace(/\.js$/, '')).sort();
-    assert.deepEqual(files, [...actions].sort(), group);
-  }
   const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(new URL(`${e.name}/`, d)) : [e.name]));
-  assert.deepEqual(walk(new URL('../../api/', import.meta.url)).filter((n) => n.includes('[')), []);
-  // 入口能调用到处理逻辑：没有配置时安全返回 503
-  const { GET } = await import('../../api/admin/me.js');
-  assert.equal((await GET(new Request('https://x.test/api/admin/me/'))).status, 503);
+  const files = walk(new URL('../../api/', import.meta.url));
+  assert.deepEqual(files.filter((n) => n.includes('[')), []);
+  const functions = files.filter((n) => n.endsWith('.js') && !n.startsWith('_'));
+  assert.ok(functions.length <= 12, `函数数量 ${functions.length}：${functions.join(', ')}`);
+  // 同一个入口按 g 参数分发；g 不对时返回 404；没有配置时安全返回 503
+  const { GET } = await import('../../api/kyb.js');
+  assert.equal((await GET(new Request('https://x.test/api/kyb/?g=admin&a=me'))).status, 503);
 });
