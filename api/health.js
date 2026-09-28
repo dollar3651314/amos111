@@ -9,8 +9,9 @@ export function GET() {
   // v3：开户所需的主密钥、私有文件存储、清理任务口令（只返回是否已配置，不返回值）
   const secret = c.appSecret.length >= 32;
   const blob = c.blobConfigured;
+  const blobUpload = c.blobUploadToken; // 浏览器直传文件所需
   const cron = Boolean(c.cronSecret);
   const mailMode = c.resendApiKey ? 'resend' : c.smtp.host ? 'smtp' : 'none';
-  const ok = storage && mail && secret && blob && cron;
-  return json(ok ? 200 : 503, { ok, storage, mail, mailMode, secret, blob, cron });
+  const ok = storage && mail && secret && blob && blobUpload && cron;
+  return json(ok ? 200 : 503, { ok, storage, mail, mailMode, secret, blob, blobUpload, cron });
 }

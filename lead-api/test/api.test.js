@@ -14,7 +14,7 @@ test('api/leads 和 api/health：没有配置存储时安全失败', async () =>
     const { GET } = await import('../../api/health.js');
     const h = GET();
     assert.equal(h.status, 503);
-    assert.deepEqual(await h.json(), { ok: false, storage: false, mail: false, mailMode: 'none', secret: false, blob: false, cron: false });
+    assert.deepEqual(await h.json(), { ok: false, storage: false, mail: false, mailMode: 'none', secret: false, blob: false, blobUpload: false, cron: false });
     // v3：开户接口在没有配置时返回 503，不泄露任何信息
     const ob = await import('../../api/onboarding/[action].js');
     const r2 = await ob.GET(new Request('http://x/api/onboarding/state/'));
