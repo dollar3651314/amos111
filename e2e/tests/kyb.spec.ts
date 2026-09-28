@@ -14,6 +14,7 @@ const PDF = { name: 'doc.pdf', mimeType: 'application/pdf', buffer: Buffer.from(
 const PNG = { name: 'id.png', mimeType: 'image/png', buffer: Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)]) };
 let totpSecret = '';
 let ref = '';
+let leadsBefore = 0;
 let adminCtx: BrowserContext;
 let admin: Page;
 
@@ -98,6 +99,11 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await admin.click('[data-login] button[type="submit"]');
     await expect(admin.locator('[data-login-err]')).toBeVisible();
     await login(admin);
+    // BUG-K9：导航上的数字登录后立即显示，0 也显示为"0"
+    await expect(admin.locator('[data-count="apps"]')).toHaveText('0');
+    await expect(admin.locator('[data-count="leads"]')).toHaveText(/^\d+$/); // 前面的用例已经提交过线索
+    leadsBefore = Number(await admin.locator('[data-count="leads"]').textContent());
+    await expect(admin.locator('[data-count="apps"]')).toHaveAttribute('title', '待审核（已提交）：0');
     const c = (await adminCtx.cookies()).find((x) => x.name === 'qc_admin')!;
     expect(c.httpOnly).toBe(true); expect(c.sameSite).toBe('Strict');
   });
@@ -226,7 +232,10 @@ test.describe.serial('TC-K v3 在线开户', () => {
   });
 
   test('TC-K06 AC-K9 后台查看完整资料、下载文件、查看签名', async () => {
-    await admin.click('[data-tab="apps"]');
+    await admin.reload();
+    await expect(admin.locator('[data-view="app"]')).toBeVisible();
+    await expect(admin.locator('[data-count="apps"]')).toHaveText('1'); // 1 个待审核
+    await expect(admin.locator('[data-count="leads"]')).toHaveText(String(leadsBefore)); // 新线索已发送链接，未发送的数量不变
     const row = admin.locator(`[data-apps-body] tr[data-ref="${ref}"]`);
     await expect(row).toContainText('已提交');
     await row.click();

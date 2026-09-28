@@ -164,7 +164,14 @@ $('[data-login]').addEventListener('submit', async (e) => {
 });
 $('[data-logout]').addEventListener('click', async () => { await A.logout().catch(() => {}); showView('login'); });
 root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => { const p = b.dataset.tab!; if (p === 'leads') await renderLeads(); else await renderList(); showPanel(p); }));
-async function enterApp() { showView('app'); await renderList(); showPanel('apps'); }
+async function enterApp() { showView('app'); await Promise.all([renderList(), renderLeads()]); showPanel('apps'); }
+// 导航上的数字：0 也显示（不再出现空圆圈）；悬停时说明数字的含义
+function setCount(key: 'apps' | 'leads', n: number, meaning: string) {
+  const b = $(`[data-count="${key}"]`);
+  b.textContent = String(n);
+  b.title = `${meaning}：${n}`;
+  b.setAttribute('aria-label', b.title);
+}
 
 // ---------- 列表 ----------
 let filter = 'all';
@@ -179,7 +186,7 @@ async function renderList() {
     b.addEventListener('click', () => { filter = k; renderList(); });
     box.appendChild(b);
   }
-  $('[data-count="apps"]').textContent = String(appsCache.filter((a) => a.status === 'submitted').length || '');
+  setCount('apps', appsCache.filter((a) => a.status === 'submitted').length, '待审核（已提交）');
   const body = $('[data-apps-body]'); body.innerHTML = '';
   for (const a of appsCache.filter((x) => filter === 'all' || x.status === filter)) {
     const tr = el('tr');
@@ -196,7 +203,7 @@ async function renderList() {
 }
 async function renderLeads() {
   const { leads } = await A.leads();
-  $('[data-count="leads"]').textContent = String(leads.filter((l: any) => !l.invited).length || '');
+  setCount('leads', leads.filter((l: any) => !l.invited).length, '还没发送开户链接');
   const body = $('[data-leads-body]'); body.innerHTML = '';
   const IND: Record<string, string> = { export: '外贸出口', manufacturing: '制造业', b2b: '跨境 B2B 贸易', other: '其他' };
   for (const l of leads) {
