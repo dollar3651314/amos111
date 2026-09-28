@@ -4,7 +4,7 @@ interface Opt { value: string; label: string }
 interface Props {
   name: string;
   label: string;
-  type?: 'text' | 'email' | 'tel' | 'date' | 'textarea' | 'select' | 'checkboxes' | 'radios';
+  type?: 'text' | 'email' | 'tel' | 'date' | 'textarea' | 'select' | 'checkboxes' | 'radios' | 'percent';
   required?: boolean;
   hint?: string;
   options?: Opt[];
@@ -26,7 +26,7 @@ const hasOther = options.some((x) => x.value === 'other');
   ) : (
     <label for={id}>{label}{required ? <span class="req" aria-hidden="true">*</span> : optionalLabel && <span class="opt"> ({optionalLabel})</span>}</label>
   )}
-  {hint && <p class="hint">{hint}</p>}
+  {hint && <p class="hint" id={`${id}-h`}>{hint}</p>}
   {type === 'textarea' && <textarea id={id} name={name} required={required} maxlength={2000} rows={3}></textarea>}
   {type === 'select' && (
     <select id={id} name={name} required={required}>
@@ -40,6 +40,9 @@ const hasOther = options.some((x) => x.value === 'other');
         <label><input type={type === 'checkboxes' ? 'checkbox' : 'radio'} name={name} value={x.value} />{x.label}</label>
       ))}
     </div>
+  )}
+  {type === 'percent' && (
+    <input id={id} name={name} type="text" inputmode="decimal" required={required} autocomplete="off" maxlength={6} aria-describedby={hint ? `${id}-h` : undefined} />
   )}
   {['text', 'email', 'tel', 'date'].includes(type) && (
     <input id={id} name={name} type={type} required={required} autocomplete={autocomplete || 'off'} maxlength={type === 'date' ? undefined : maxlength} />

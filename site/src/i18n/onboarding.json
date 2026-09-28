@@ -65,18 +65,30 @@
       },
       "purpose": "Purpose of the business relationship with Quick Come",
       "purposeOptions": {
-        "deposits": "Process client deposits and withdrawals",
-        "other": "Other"
+        "crypto": "Accepting crypto payments from customers",
+        "exchange": "Facilitating crypto-to-fiat or fiat-to-crypto payments",
+        "deposits": "Processing client deposits and withdrawals",
+        "other": "Other payment-related activities"
       },
+      "purposeHint": "Select all that apply.",
       "volume": "Expected transaction volume (per month, USD)",
       "volumeOptions": {
         "lt50k": "Less than 50,000",
         "50k-100k": "50,000 to 100,000",
         "100k-500k": "100,001 to 500,000",
-        "gt500k": "More than 500,000",
+        "gt500k": "More than 500,000"
+      },
+      "volumeAmount": "Estimated monthly amount (USD)",
+      "currencies": "Currencies / digital assets expected to be used",
+      "currencyOptions": {
+        "usd": "USD",
+        "eur": "EUR",
+        "usdt": "USDT",
+        "usdc": "USDC",
+        "btc": "BTC",
+        "eth": "ETH",
         "other": "Other"
       },
-      "volumeAmount": "Estimated amount",
       "markets": "Target markets",
       "marketOptions": {
         "europe": "Europe",
@@ -87,6 +99,8 @@
         "apac": "APAC",
         "other": "Other"
       },
+      "sanctions": "Does the company expect any direct or indirect transactions involving sanctioned countries/territories or sanctioned persons?",
+      "sanctionsDetails": "Please provide the relevant jurisdictions, nature of activity and expected transaction volume.",
       "parent": "Group / parent company name, if any"
     },
     "s2": {
@@ -123,6 +137,9 @@
       "passportNo": "Passport number",
       "passportCountry": "Passport issuing country",
       "passportExpiry": "Passport expiry date",
+      "ownershipPct": "Ownership (%)",
+      "votingPct": "Voting rights (%)",
+      "pctHint": "UBOs only. Enter 0–100. If ownership and voting rights are the same, enter the same number.",
       "pep": "Is this person a Politically Exposed Person (PEP), or a family member or close associate of a PEP?",
       "pepDetails": "Please provide the official title/position and public function, or the nature of the relationship together with the PEP's full name and title.",
       "email": "Email",
@@ -229,7 +246,8 @@
       "fileSize": "Each file must be 10 MB or smaller.",
       "signature": "Please sign in the box.",
       "summary": "Please correct the highlighted fields.",
-      "invalid": "This link is invalid or has expired. Please contact us for a new link."
+      "invalid": "This link is invalid or has expired. Please contact us for a new link.",
+      "percent": "Enter a number from 0 to 100 (up to 2 decimal places)."
     },
     "prototype": {
       "demo": "Demo data"
@@ -302,18 +320,30 @@
       },
       "purpose": "与 Quick Come 建立业务关系的用途",
       "purposeOptions": {
+        "crypto": "接受客户的加密货币付款",
+        "exchange": "加密货币与法币互换",
         "deposits": "处理客户充值和提现",
-        "other": "其他"
+        "other": "其他支付相关业务"
       },
+      "purposeHint": "可以多选。",
       "volume": "预计月交易量（美元）",
       "volumeOptions": {
         "lt50k": "5 万以下",
         "50k-100k": "5 万到 10 万",
         "100k-500k": "10 万到 50 万",
-        "gt500k": "50 万以上",
+        "gt500k": "50 万以上"
+      },
+      "volumeAmount": "预计每月金额（美元）",
+      "currencies": "预计使用的币种和数字资产",
+      "currencyOptions": {
+        "usd": "USD",
+        "eur": "EUR",
+        "usdt": "USDT",
+        "usdc": "USDC",
+        "btc": "BTC",
+        "eth": "ETH",
         "other": "其他"
       },
-      "volumeAmount": "大约金额",
       "markets": "目标市场",
       "marketOptions": {
         "europe": "欧洲",
@@ -324,6 +354,8 @@
         "apac": "亚太",
         "other": "其他"
       },
+      "sanctions": "公司是否预计会有直接或间接涉及受制裁国家、地区或受制裁人员的交易？",
+      "sanctionsDetails": "请说明涉及的国家或地区、业务性质和预计交易量。",
       "parent": "集团 / 母公司名称，如有"
     },
     "s2": {
@@ -360,6 +392,9 @@
       "passportNo": "护照号码",
       "passportCountry": "护照签发国",
       "passportExpiry": "护照到期日",
+      "ownershipPct": "持股比例（%）",
+      "votingPct": "投票权比例（%）",
+      "pctHint": "仅 UBO 填写，0 到 100。持股比例和投票权比例相同时，填写相同的数字。",
       "pep": "此人是否为政治公众人物（PEP），或 PEP 的家庭成员、密切关系人？",
       "pepDetails": "请填写官方职务及公共职能；如果是家庭成员或密切关系人，请说明与 PEP 的关系，以及 PEP 本人的全名和职务。",
       "email": "邮箱",
@@ -466,7 +501,8 @@
       "fileSize": "每个文件不能超过 10MB。",
       "signature": "请在框内签名。",
       "summary": "请修改标出的字段。",
-      "invalid": "此链接无效或已过期，请联系我们获取新的链接。"
+      "invalid": "此链接无效或已过期，请联系我们获取新的链接。",
+      "percent": "请输入 0 到 100 的数字，最多 2 位小数。"
     },
     "prototype": {
       "demo": "演示数据"

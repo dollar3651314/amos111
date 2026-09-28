@@ -65,9 +65,17 @@ const clientConfig = {
           <Field name="entity.lei" label={c.s1.lei} {...common} />
           <Field name="entity.tin" label={c.s1.tin} {...common} />
           <Field name="entity.nature" label={c.s1.nature} type="checkboxes" options={opts(c.s1.natureOptions)} required span {...common} />
-          <Field name="entity.purpose" label={c.s1.purpose} type="radios" options={opts(c.s1.purposeOptions)} required span {...common} />
+          <Field name="entity.purpose" label={c.s1.purpose} hint={c.s1.purposeHint} type="checkboxes" options={opts(c.s1.purposeOptions)} required span {...common} />
           <Field name="entity.volume" label={c.s1.volume} type="radios" options={opts(c.s1.volumeOptions)} required span {...common} />
+          <div class="span-all" data-cond="volume-amount" hidden>
+            <Field name="entity.volumeAmount" label={c.s1.volumeAmount} required span {...common} />
+          </div>
+          <Field name="entity.currencies" label={c.s1.currencies} type="checkboxes" options={opts(c.s1.currencyOptions)} required span {...common} />
           <Field name="entity.markets" label={c.s1.markets} type="checkboxes" options={opts(c.s1.marketOptions)} required span {...common} />
+          <Field name="entity.sanctions" label={c.s1.sanctions} type="radios" options={yesNo} required span {...common} />
+          <div class="span-all" data-cond="sanctions-details" hidden>
+            <Field name="entity.sanctionsDetails" label={c.s1.sanctionsDetails} type="textarea" required span {...common} />
+          </div>
           <Field name="entity.parent" label={c.s1.parent} span {...common} />
         </div>
       </section>
@@ -117,6 +125,10 @@ const clientConfig = {
               <Field name="people.__i__.passportNo" label={c.s4.passportNo} required {...common} />
               <Field name="people.__i__.passportCountry" label={c.s4.passportCountry} required {...common} />
               <Field name="people.__i__.passportExpiry" label={c.s4.passportExpiry} type="date" required {...common} />
+              <div class="span-all fgrid" data-ubo-fields hidden>
+                <Field name="people.__i__.ownershipPct" label={c.s4.ownershipPct} type="percent" hint={c.s4.pctHint} required {...common} />
+                <Field name="people.__i__.votingPct" label={c.s4.votingPct} type="percent" required {...common} />
+              </div>
               <Field name="people.__i__.pep" label={c.s4.pep} type="radios" options={yesNo} required span {...common} />
               <div class="span-all" data-pep-details hidden>
                 <Field name="people.__i__.pepDetails" label={c.s4.pepDetails} type="textarea" required span {...common} />

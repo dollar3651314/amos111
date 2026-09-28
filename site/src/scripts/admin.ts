@@ -18,20 +18,37 @@ const dt = (s?: string | null) => (s ? new Date(s).toLocaleString('zh-CN', { hou
 
 // ---------- 字段标签（与客户页面同一份文案） ----------
 const LABELS: Record<string, Record<string, string>> = {
-  entity: { legalName: C.s1.legalName, tradingName: C.s1.tradingName, legalForm: C.s1.legalForm, regNumber: C.s1.regNumber, incDate: C.s1.incDate, incPlace: C.s1.incPlace, regAddress: C.s1.regAddress, physAddress: C.s1.physAddress, lei: C.s1.lei, tin: C.s1.tin, nature: C.s1.nature, purpose: C.s1.purpose, volume: C.s1.volume, markets: C.s1.markets, parent: C.s1.parent },
+  entity: { legalName: C.s1.legalName, tradingName: C.s1.tradingName, legalForm: C.s1.legalForm, regNumber: C.s1.regNumber, incDate: C.s1.incDate, incPlace: C.s1.incPlace, regAddress: C.s1.regAddress, physAddress: C.s1.physAddress, lei: C.s1.lei, tin: C.s1.tin, nature: C.s1.nature, purpose: C.s1.purpose, volume: C.s1.volume, volumeAmount: C.s1.volumeAmount, currencies: C.s1.currencies, markets: C.s1.markets, sanctions: '涉及制裁', sanctionsDetails: '制裁说明', parent: C.s1.parent },
   contact: { website: C.s2.website, email: C.s2.email, phone: C.s2.phone, otherContact: C.s2.otherContact },
   rep: { name: C.s3.name, email: C.s3.email, phone: C.s3.phone, otherContact: C.s3.otherContact },
-  person: { roles: C.s4.roles, dob: C.s4.dob, nationality: C.s4.nationality, residence: C.s4.residence, address: C.s4.address, passportNo: C.s4.passportNo, passportCountry: C.s4.passportCountry, passportExpiry: C.s4.passportExpiry, pep: 'PEP', pepDetails: 'PEP 说明', email: C.s4.email, phone: C.s4.phone },
+  person: { roles: C.s4.roles, dob: C.s4.dob, nationality: C.s4.nationality, residence: C.s4.residence, address: C.s4.address, passportNo: C.s4.passportNo, passportCountry: C.s4.passportCountry, passportExpiry: C.s4.passportExpiry, ownershipPct: C.s4.ownershipPct, votingPct: C.s4.votingPct, pep: 'PEP', pepDetails: 'PEP 说明', email: C.s4.email, phone: C.s4.phone },
   wallet: { clientName: C.s6.clientName, idTypeNo: C.s6.idTypeNo, userId: C.s6.userId, email: C.s6.email, address: C.s6.wallet, network: C.s6.network, use: C.s6.use, ownershipOk: C.s6.ownershipTitle, riskOk: C.s6.riskTitle, proofType: C.s6.proof },
   decl: { repName: C.s7.repName, position: C.s7.position, confirm: '确认声明' },
 };
 const OPTIONS: Record<string, Record<string, string>> = {
-  nature: C.s1.natureOptions, purpose: C.s1.purposeOptions, volume: C.s1.volumeOptions, markets: C.s1.marketOptions,
+  nature: C.s1.natureOptions, purpose: C.s1.purposeOptions, volume: { ...C.s1.volumeOptions, other: '其他（v3 选项）' }, currencies: C.s1.currencyOptions, markets: C.s1.marketOptions, sanctions: { yes: C.yes, no: C.no },
   roles: C.s4.roleOptions, pep: { yes: C.yes, no: C.no }, network: C.s6.networkOptions, use: C.s6.useOptions, proofType: C.s6.proofOptions,
 };
-const DOC_NAMES: Record<string, string> = { ...(C.s5.docs as Record<string, string>), passport: C.s5.passport, poa: C.s5.poa, walletProof: C.s6.proof };
+const DOC_NAMES: Record<string, string> = {
+  ...(C.s5.docs as Record<string, string>), passport: C.s5.passport, poa: C.s5.poa, walletProof: C.s6.proof,
+  // v4 删除了第 11、12 项；已有申请里的这两项文件照常显示和下载
+  d11: `${C.s5.docs.d11}（旧版文件项）`, d12: `${C.s5.docs.d12}（旧版文件项）`,
+};
+// v4 新增的字段：v3 提交的申请里没有，显示为"（v3 提交，没有此项）"
+const V4_FIELDS = new Set(['currencies', 'sanctions', 'sanctionsDetails', 'volumeAmount', 'ownershipPct', 'votingPct']);
+const LEGACY = '（v3 提交，没有此项）';
+/** 按选择才出现的字段：不适用时不显示这一行 */
+function applicable(key: string, group: Record<string, any>): boolean {
+  if (key === 'volumeAmount') return group.volume === 'gt500k';
+  if (key === 'sanctionsDetails') return group.sanctions === 'yes';
+  if (key === 'ownershipPct' || key === 'votingPct') return Array.isArray(group.roles) && group.roles.includes('ubo');
+  return true;
+}
+const sanctionsFlag = () => el('span', 'status st-needs_info flag-sanctions', '涉及制裁：是');
 function fmt(key: string, group: Record<string, any>): string {
   const v = group[key];
+  if (v === undefined && V4_FIELDS.has(key)) return LEGACY;
+  if ((key === 'ownershipPct' || key === 'votingPct') && v) return `${v}%`;
   if (v === true) return '已确认';
   if (v === false || v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) return '—';
   const opts = OPTIONS[key];
@@ -53,35 +70,56 @@ async function call(path: string, body?: unknown) {
 // ---------- 原型的模拟数据（虚构，格式与真实接口相同） ----------
 const now = Date.now();
 const d = (days: number) => new Date(now + days * 864e5).toISOString();
-const protoApps: any[] = [
+// v4：?empty=1 时显示空状态（没有任何申请和线索），用来确认空状态的样子（agents v0.5.1 C32）
+const PROTO_EMPTY = new URLSearchParams(location.search).get('empty') === '1';
+const protoApps: any[] = PROTO_EMPTY ? [] : [
+  { id: 'a5', ref: 'QC-2026-0004', company: 'Delta Payments FZE', status: 'submitted', updatedAt: d(0), createdAt: d(-4), submittedAt: d(0), expiresAt: d(26), retentionUntil: d(361), fileCount: 10, flags: { sanctions: true } },
   { id: 'a1', ref: 'QC-2026-0003', company: 'Acme Export Ltd', status: 'submitted', updatedAt: d(0), createdAt: d(-6), submittedAt: d(0), expiresAt: d(24), retentionUntil: d(359), fileCount: 11 },
   { id: 'a2', ref: 'QC-2026-0002', company: 'Northwind Manufacturing Co.', status: 'in_progress', updatedAt: d(-1), createdAt: d(-3), submittedAt: null, expiresAt: d(27), retentionUntil: d(362), fileCount: 2 },
   { id: 'a3', ref: 'QC-2026-0001', company: 'Blue Harbor Trading', status: 'needs_info', updatedAt: d(-2), createdAt: d(-12), submittedAt: d(-5), expiresAt: d(28), retentionUntil: d(353), fileCount: 9 },
-  { id: 'a4', ref: 'QC-2026-0000', company: 'Old Lead Pte Ltd', status: 'expired', updatedAt: d(-31), createdAt: d(-61), submittedAt: null, expiresAt: d(-31), retentionUntil: d(304), fileCount: 0 },
+  { id: 'a6', ref: 'QC-2026-0000', company: 'Harbor Legacy Ltd（v3 提交）', status: 'approved', updatedAt: d(-20), createdAt: d(-40), submittedAt: d(-30), expiresAt: d(-10), retentionUntil: null, fileCount: 9 },
 ];
-const protoDetail = (a: any) => a.id !== 'a1' ? { app: { ...a, email: 'contact@example.com', invitedAt: a.createdAt, unlocked: a.status === 'needs_info' ? ['docs'] : [] }, form: {}, files: [], signature: null, review: {}, audit: [{ at: a.createdAt, actor: 'admin', action: 'invited' }] } : {
-  app: { ...a, email: 'ops@acme-export.example', invitedAt: a.createdAt, unlocked: [] },
-  form: {
-    entity: { legalName: 'Acme Export Limited', tradingName: 'Acme', legalForm: 'Ltd', regNumber: '202012345K', incDate: '2020-04-18', incPlace: 'Singapore', regAddress: '10 Anson Road, #20-01, Singapore 079903', physAddress: '10 Anson Road, #20-01, Singapore 079903', lei: '', tin: 'T20SG1234A', nature: ['export', 'b2b'], purpose: 'deposits', volume: '100k-500k', markets: ['apac', 'me'], parent: '' },
-    contact: { website: 'acme-export.example', email: 'ops@acme-export.example', phone: '+65 6000 1234', otherContact: 'Telegram @acmeops' },
-    rep: { name: 'Jane Tan', email: 'jane@acme-export.example', phone: '+65 9000 1111', otherContact: '' },
-    people: [
-      { pid: '0', roles: ['director', 'ubo', 'signatory'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'Singapore', residence: 'Singapore', address: '8 Demo Street, Singapore', passportNo: 'K1234567X', passportCountry: 'Singapore', passportExpiry: '2031-05-01', pep: 'no', pepDetails: '', email: 'jane@acme-export.example', phone: '+65 9000 1111' },
-      { pid: '1', roles: ['ubo'], fullName: 'Wei Lim', dob: '1979-09-30', nationality: 'Malaysia', residence: 'Singapore', address: '21 Sample Road, Singapore', passportNo: 'A98765432', passportCountry: 'Malaysia', passportExpiry: '2029-11-20', pep: 'no', pepDetails: '', email: 'wei@acme-export.example', phone: '+65 9000 2222' },
-    ],
-    wallet: { clientName: 'Acme Export Limited', idTypeNo: 'Registration 202012345K', userId: '', email: 'ops@acme-export.example', address: 'TXYZ…DEMO…9Kp2', network: 'tron', use: 'both', ownershipOk: true, riskOk: true, proofType: 'provider' },
-    decl: { repName: 'Jane Tan', position: 'Director', confirm: true },
-  },
-  files: [
-    ...['d1', 'd2', 'd3', 'd4', 'd5', 'd6'].map((x, i) => ({ id: 'f' + i, doc: x, name: `${x}-document.pdf`, size: 400000 + i * 90000 })),
-    { id: 'p1', doc: 'passport', person: '0', name: 'jane-passport.jpg', size: 1900000 }, { id: 'p2', doc: 'poa', person: '0', name: 'jane-poa.pdf', size: 500000 },
-    { id: 'p3', doc: 'passport', person: '1', name: 'wei-passport.jpg', size: 2100000 }, { id: 'p4', doc: 'poa', person: '1', name: 'wei-poa.pdf', size: 400000 },
-    { id: 'w1', doc: 'walletProof', name: 'wallet-screenshot.png', size: 700000 },
-  ],
-  signature: { signedAt: d(0), ip: '203.0.113.24' }, review: { received: d(0) },
-  audit: [{ at: d(-6), actor: 'admin', action: 'invited' }, { at: d(0), actor: 'client', action: 'submitted' }],
+const demoPeople = [
+  { pid: '0', roles: ['director', 'ubo', 'signatory'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'Singapore', residence: 'Singapore', address: '8 Demo Street, Singapore', passportNo: 'K1234567X', passportCountry: 'Singapore', passportExpiry: '2031-05-01', ownershipPct: '60', votingPct: '60', pep: 'no', pepDetails: '', email: 'jane@acme-export.example', phone: '+65 9000 1111' },
+  { pid: '1', roles: ['ubo'], fullName: 'Wei Lim', dob: '1979-09-30', nationality: 'Malaysia', residence: 'Singapore', address: '21 Sample Road, Singapore', passportNo: 'A98765432', passportCountry: 'Malaysia', passportExpiry: '2029-11-20', ownershipPct: '40', votingPct: '40', pep: 'no', pepDetails: '', email: 'wei@acme-export.example', phone: '+65 9000 2222' },
+];
+const demoRest = {
+  contact: { website: 'acme-export.example', email: 'ops@acme-export.example', phone: '+65 6000 1234', otherContact: 'Telegram @acmeops' },
+  rep: { name: 'Jane Tan', email: 'jane@acme-export.example', phone: '+65 9000 1111', otherContact: '' },
+  wallet: { clientName: 'Acme Export Limited', idTypeNo: 'Registration 202012345K', userId: '', email: 'ops@acme-export.example', address: 'TXYZ…DEMO…9Kp2', network: 'tron', use: 'both', ownershipOk: true, riskOk: true, proofType: 'provider' },
+  decl: { repName: 'Jane Tan', position: 'Director', confirm: true },
 };
-const protoLeads = [
+const demoEntity = { legalName: 'Acme Export Limited', tradingName: 'Acme', legalForm: 'Ltd', regNumber: '202012345K', incDate: '2020-04-18', incPlace: 'Singapore', regAddress: '10 Anson Road, #20-01, Singapore 079903', physAddress: '10 Anson Road, #20-01, Singapore 079903', lei: '', tin: 'T20SG1234A', nature: ['export', 'b2b'], purpose: ['deposits', 'crypto'], volume: '100k-500k', volumeAmount: '', currencies: ['usd', 'usdt'], markets: ['apac', 'me'], sanctions: 'no', sanctionsDetails: '', parent: '' };
+const demoFiles = [
+  ...['d1', 'd2', 'd3', 'd4', 'd5', 'd6'].map((x, i) => ({ id: 'f' + i, doc: x, name: `${x}-document.pdf`, size: 400000 + i * 90000 })),
+  { id: 'p1', doc: 'passport', person: '0', name: 'jane-passport.jpg', size: 1900000 }, { id: 'p2', doc: 'poa', person: '0', name: 'jane-poa.pdf', size: 500000 },
+  { id: 'p3', doc: 'passport', person: '1', name: 'wei-passport.jpg', size: 2100000 }, { id: 'p4', doc: 'poa', person: '1', name: 'wei-poa.pdf', size: 400000 },
+  { id: 'w1', doc: 'walletProof', name: 'wallet-screenshot.png', size: 700000 },
+];
+const protoForms: Record<string, any> = {
+  a1: { entity: demoEntity, people: demoPeople, ...demoRest },
+  a5: {
+    entity: { ...demoEntity, legalName: 'Delta Payments FZE', nature: ['other'], natureOther: 'Payment service provider', purpose: ['exchange', 'deposits'], volume: 'gt500k', volumeAmount: 'USD 1,200,000', currencies: ['usdt', 'usdc', 'other'], currenciesOther: 'TRX', markets: ['me', 'apac'], sanctions: 'yes', sanctionsDetails: 'Some end users may be located in a sanctioned region; estimated volume under USD 20,000 per month.' },
+    people: [demoPeople[0]], ...demoRest,
+  },
+  // v3 提交的申请：没有 v4 新增的字段，业务用途还是单选
+  a6: {
+    entity: (({ currencies, sanctions, sanctionsDetails, volumeAmount, ...rest }) => ({ ...rest, legalName: 'Harbor Legacy Limited', purpose: 'deposits' }))(demoEntity as any),
+    people: demoPeople.map(({ ownershipPct, votingPct, ...p }) => p), ...demoRest,
+  },
+};
+const protoDetail = (a: any) => {
+  const form = protoForms[a.id];
+  return {
+    app: { ...a, email: form ? 'ops@acme-export.example' : 'contact@example.com', invitedAt: a.createdAt, unlocked: a.status === 'needs_info' ? ['docs'] : [] },
+    form: form || {},
+    files: form ? [...demoFiles, ...(a.id === 'a6' ? [{ id: 'old11', doc: 'd11', name: 'initial-funding.pdf', size: 300000 }] : [])] : [],
+    signature: form ? { signedAt: a.submittedAt, ip: '203.0.113.24' } : null,
+    review: form ? { received: a.submittedAt, ...(a.status === 'approved' ? { reviewer: 'Amos', reviewDate: a.updatedAt } : {}) } : {},
+    audit: [{ at: a.createdAt, actor: 'admin', action: 'invited' }, ...(a.submittedAt ? [{ at: a.submittedAt, actor: 'client', action: 'submitted' }] : [])],
+  };
+};
+const protoLeads = PROTO_EMPTY ? [] : [
   { id: 'l1', receivedAt: d(0), company: 'Sunrise Furniture Export', name: 'Li Ming', email: 'li@sunrise.example', country: 'Vietnam', industry: 'export', invited: false },
   { id: 'l2', receivedAt: d(-1), company: 'Northwind Manufacturing Co.', name: 'Anna Berg', email: 'finance@northwind.example', country: 'Germany', industry: 'manufacturing', invited: true },
 ];
@@ -191,7 +229,7 @@ async function renderList() {
   for (const a of appsCache.filter((x) => filter === 'all' || x.status === filter)) {
     const tr = el('tr');
     tr.append(el('td', '', a.ref), el('td', '', a.company));
-    const st = el('td'); st.appendChild(statusBadge(a.status)); tr.appendChild(st);
+    const st = el('td', 'status-cell'); st.appendChild(statusBadge(a.status)); if (a.flags?.sanctions) st.appendChild(sanctionsFlag()); tr.appendChild(st);
     tr.append(el('td', '', day(a.updatedAt)), el('td', '', a.retentionUntil ? day(a.retentionUntil) : '业务关系存续期间'));
     tr.tabIndex = 0;
     tr.dataset.ref = a.ref;
@@ -253,13 +291,14 @@ function kvCard(title: string, rows: [string, string][]) {
   card.appendChild(dl);
   return card;
 }
-const rowsOf = (labels: Record<string, string>, group: Record<string, any> = {}) => Object.keys(labels).map((k) => [labels[k], fmt(k, group)] as [string, string]);
+const rowsOf = (labels: Record<string, string>, group: Record<string, any> = {}) => Object.keys(labels).filter((k) => applicable(k, group)).map((k) => [labels[k], fmt(k, group)] as [string, string]);
 async function openDetail(id: string) {
   const r = await A.app(id);
   const a = r.app, f = r.form || {};
   const box = $('[data-detail-sections]'); box.innerHTML = '';
   const head = el('div', 'toolbar');
   head.append(el('h1', 'm0', a.company), statusBadge(a.status));
+  if (f.entity?.sanctions === 'yes' || a.flags?.sanctions) head.appendChild(sanctionsFlag());
   box.appendChild(head);
   if (a.status === 'needs_info' && a.unlocked?.length) box.appendChild(el('p', 'notice', `已要求补件：${a.unlocked.map((s: string) => SECTION_NAMES[s]).join('、')}。客户再次提交后会通知你。`));
   if (!f.entity) {
