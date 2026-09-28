@@ -1,7 +1,14 @@
 {
   "en": {
-    "meta": { "title": "Business onboarding - Quick Come", "description": "Complete your Quick Come business onboarding (KYB)." },
-    "header": { "secure": "Secure onboarding", "switch": "中文", "switchAria": "切换到中文" },
+    "meta": {
+      "title": "Business onboarding - Quick Come",
+      "description": "Complete your Quick Come business onboarding (KYB)."
+    },
+    "header": {
+      "secure": "Secure onboarding",
+      "switch": "中文",
+      "switchAria": "切换到中文"
+    },
     "intro": {
       "title": "Business onboarding",
       "body": "Please complete all steps and upload the supporting documents. You can save at any time and continue later using the same link.",
@@ -9,8 +16,23 @@
       "ref": "Reference",
       "expires": "Link valid until"
     },
-    "steps": ["Entity", "Contact", "Contact person", "People", "Documents", "Wallet", "Declaration"],
-    "nav": { "back": "Back", "next": "Save & continue", "save": "Save", "saved": "Saved", "submit": "Submit application", "stepOf": "Step {n} of {total}" },
+    "steps": [
+      "Entity",
+      "Contact",
+      "Contact person",
+      "People",
+      "Documents",
+      "Wallet",
+      "Declaration"
+    ],
+    "nav": {
+      "back": "Back",
+      "next": "Save & continue",
+      "save": "Save",
+      "saved": "Saved",
+      "submit": "Submit application",
+      "stepOf": "Step {n} of {total}"
+    },
     "required": "Required",
     "optional": "optional",
     "select": "Select...",
@@ -32,18 +54,55 @@
       "lei": "Legal Entity Identifier (LEI), if held",
       "tin": "Tax Identification Number (TIN), if any",
       "nature": "Nature of business",
-      "natureOptions": { "export": "Export", "manufacturing": "Manufacturing", "b2b": "Cross-border B2B trade", "cfd": "CFD trading", "securities": "Securities and investment trading", "fx": "Foreign exchange and financial market trading", "other": "Other" },
+      "natureOptions": {
+        "export": "Export",
+        "manufacturing": "Manufacturing",
+        "b2b": "Cross-border B2B trade",
+        "cfd": "CFD trading",
+        "securities": "Securities and investment trading",
+        "fx": "Foreign exchange and financial market trading",
+        "other": "Other"
+      },
       "purpose": "Purpose of the business relationship with Quick Come",
-      "purposeOptions": { "deposits": "Process client deposits and withdrawals", "other": "Other" },
+      "purposeOptions": {
+        "deposits": "Process client deposits and withdrawals",
+        "other": "Other"
+      },
       "volume": "Expected transaction volume (per month, USD)",
-      "volumeOptions": { "lt50k": "Less than 50,000", "50k-100k": "50,000 to 100,000", "100k-500k": "100,001 to 500,000", "gt500k": "More than 500,000", "other": "Other" },
+      "volumeOptions": {
+        "lt50k": "Less than 50,000",
+        "50k-100k": "50,000 to 100,000",
+        "100k-500k": "100,001 to 500,000",
+        "gt500k": "More than 500,000",
+        "other": "Other"
+      },
       "volumeAmount": "Estimated amount",
       "markets": "Target markets",
-      "marketOptions": { "europe": "Europe", "na": "North America", "latam": "LATAM", "uk": "UK", "me": "Middle East", "apac": "APAC", "other": "Other" },
+      "marketOptions": {
+        "europe": "Europe",
+        "na": "North America",
+        "latam": "LATAM",
+        "uk": "UK",
+        "me": "Middle East",
+        "apac": "APAC",
+        "other": "Other"
+      },
       "parent": "Group / parent company name, if any"
     },
-    "s2": { "title": "2. Company contact details", "website": "Official website / domain(s)", "email": "Company email", "phone": "Contact number (with country code)", "otherContact": "Other contact details (e.g. Telegram, Teams)" },
-    "s3": { "title": "3. Authorized contact person", "name": "Full name", "email": "Email", "phone": "Contact number (with country code)", "otherContact": "Other contact details (e.g. Telegram, Teams)" },
+    "s2": {
+      "title": "2. Company contact details",
+      "website": "Official website / domain(s)",
+      "email": "Company email",
+      "phone": "Contact number (with country code)",
+      "otherContact": "Other contact details (e.g. Telegram, Teams)"
+    },
+    "s3": {
+      "title": "3. Authorized contact person",
+      "name": "Full name",
+      "email": "Email",
+      "phone": "Contact number (with country code)",
+      "otherContact": "Other contact details (e.g. Telegram, Teams)"
+    },
     "s4": {
       "title": "4. Directors, UBOs and authorized signatories",
       "body": "Add every director, ultimate beneficial owner (25% or more ownership or control) and authorized signatory. If one person holds several roles, add them once and tick all roles. At least one director and one UBO are required.",
@@ -51,7 +110,11 @@
       "add": "Add a person",
       "remove": "Remove",
       "roles": "Role(s)",
-      "roleOptions": { "director": "Director", "ubo": "UBO", "signatory": "Authorized signatory" },
+      "roleOptions": {
+        "director": "Director",
+        "ubo": "UBO",
+        "signatory": "Authorized signatory"
+      },
       "fullName": "Full legal name",
       "dob": "Date of birth",
       "nationality": "Nationality",
@@ -102,9 +165,17 @@
       "email": "Email",
       "wallet": "Wallet address",
       "network": "Blockchain / network",
-      "networkOptions": { "tron": "TRON", "ethereum": "Ethereum", "other": "Other" },
+      "networkOptions": {
+        "tron": "TRON",
+        "ethereum": "Ethereum",
+        "other": "Other"
+      },
       "use": "Intended use of wallet",
-      "useOptions": { "deposit": "Deposit", "withdrawal": "Withdrawal", "both": "Both" },
+      "useOptions": {
+        "deposit": "Deposit",
+        "withdrawal": "Withdrawal",
+        "both": "Both"
+      },
       "ownershipTitle": "Declaration of ownership",
       "ownership": [
         "I am the sole owner of, and have full and exclusive control over, the private keys of the wallet above.",
@@ -123,7 +194,11 @@
       ],
       "riskCheck": "I acknowledge the risks above.",
       "proof": "Proof of wallet ownership",
-      "proofOptions": { "provider": "Screenshot from the wallet provider or exchange showing the address linked to an account in the entity's name", "explorer": "Blockchain explorer screenshot plus proof of control (signed message or reference code provided by us)", "other": "Other documentation (please specify)" }
+      "proofOptions": {
+        "provider": "Screenshot from the wallet provider or exchange showing the address linked to an account in the entity's name",
+        "explorer": "Blockchain explorer screenshot plus proof of control (signed message or reference code provided by us)",
+        "other": "Other documentation (please specify)"
+      }
     },
     "s7": {
       "title": "7. Declaration and signature",
@@ -136,13 +211,41 @@
       "clear": "Clear",
       "recorded": "The date, time and IP address of signing will be recorded."
     },
-    "done": { "title": "Application submitted", "body": "Thank you. We have received your application and will review it shortly. We will contact you by email if anything else is needed.", "readonly": "This application can no longer be edited." },
-    "errors": { "required": "This field is required.", "email": "Please enter a valid email address.", "phone": "Use digits, spaces, +, - or () only.", "date": "Please enter a valid date.", "future": "The passport must not be expired.", "people": "Add at least one director and one UBO.", "roles": "Select at least one role.", "docs": "Please upload all required documents.", "fileType": "Only PDF, JPG or PNG files are accepted.", "fileSize": "Each file must be 10 MB or smaller.", "signature": "Please sign in the box.", "summary": "Please correct the highlighted fields.", "invalid": "This link is invalid or has expired. Please contact us for a new link." },
-    "prototype": { "demo": "Demo data" }
+    "done": {
+      "title": "Application submitted",
+      "body": "Thank you. We have received your application and will review it shortly. We will contact you by email if anything else is needed.",
+      "readonly": "This application can no longer be edited."
+    },
+    "errors": {
+      "required": "This field is required.",
+      "email": "Please enter a valid email address.",
+      "phone": "Use digits, spaces, +, - or () only.",
+      "date": "Please enter a valid date.",
+      "future": "The passport must not be expired.",
+      "people": "Add at least one director and one UBO.",
+      "roles": "Select at least one role.",
+      "docs": "Please upload all required documents.",
+      "fileType": "Only PDF, JPG or PNG files are accepted.",
+      "fileSize": "Each file must be 10 MB or smaller.",
+      "signature": "Please sign in the box.",
+      "summary": "Please correct the highlighted fields.",
+      "invalid": "This link is invalid or has expired. Please contact us for a new link."
+    },
+    "prototype": {
+      "demo": "Demo data"
+    },
+    "locked": "This section does not need changes. Only the sections requested by our team can be edited."
   },
   "zh": {
-    "meta": { "title": "企业开户 - Quick Come", "description": "完成 Quick Come 企业开户资料（KYB）。" },
-    "header": { "secure": "安全开户通道", "switch": "EN", "switchAria": "Switch to English" },
+    "meta": {
+      "title": "企业开户 - Quick Come",
+      "description": "完成 Quick Come 企业开户资料（KYB）。"
+    },
+    "header": {
+      "secure": "安全开户通道",
+      "switch": "EN",
+      "switchAria": "Switch to English"
+    },
     "intro": {
       "title": "企业开户",
       "body": "请完成全部步骤并上传证明文件。您可以随时保存，之后用同一个链接继续填写。",
@@ -150,8 +253,23 @@
       "ref": "编号",
       "expires": "链接有效期至"
     },
-    "steps": ["企业信息", "联系方式", "授权联系人", "人员", "文件", "钱包", "声明"],
-    "nav": { "back": "上一步", "next": "保存并继续", "save": "保存", "saved": "已保存", "submit": "提交申请", "stepOf": "第 {n} 步，共 {total} 步" },
+    "steps": [
+      "企业信息",
+      "联系方式",
+      "授权联系人",
+      "人员",
+      "文件",
+      "钱包",
+      "声明"
+    ],
+    "nav": {
+      "back": "上一步",
+      "next": "保存并继续",
+      "save": "保存",
+      "saved": "已保存",
+      "submit": "提交申请",
+      "stepOf": "第 {n} 步，共 {total} 步"
+    },
     "required": "必填",
     "optional": "选填",
     "select": "请选择……",
@@ -173,18 +291,55 @@
       "lei": "法人机构识别编码（LEI），如有",
       "tin": "税号（TIN），如有",
       "nature": "业务性质",
-      "natureOptions": { "export": "外贸出口", "manufacturing": "制造业", "b2b": "跨境 B2B 贸易", "cfd": "CFD 交易", "securities": "证券与投资交易", "fx": "外汇与金融市场交易", "other": "其他" },
+      "natureOptions": {
+        "export": "外贸出口",
+        "manufacturing": "制造业",
+        "b2b": "跨境 B2B 贸易",
+        "cfd": "CFD 交易",
+        "securities": "证券与投资交易",
+        "fx": "外汇与金融市场交易",
+        "other": "其他"
+      },
       "purpose": "与 Quick Come 建立业务关系的用途",
-      "purposeOptions": { "deposits": "处理客户充值和提现", "other": "其他" },
+      "purposeOptions": {
+        "deposits": "处理客户充值和提现",
+        "other": "其他"
+      },
       "volume": "预计月交易量（美元）",
-      "volumeOptions": { "lt50k": "5 万以下", "50k-100k": "5 万到 10 万", "100k-500k": "10 万到 50 万", "gt500k": "50 万以上", "other": "其他" },
+      "volumeOptions": {
+        "lt50k": "5 万以下",
+        "50k-100k": "5 万到 10 万",
+        "100k-500k": "10 万到 50 万",
+        "gt500k": "50 万以上",
+        "other": "其他"
+      },
       "volumeAmount": "大约金额",
       "markets": "目标市场",
-      "marketOptions": { "europe": "欧洲", "na": "北美", "latam": "拉美", "uk": "英国", "me": "中东", "apac": "亚太", "other": "其他" },
+      "marketOptions": {
+        "europe": "欧洲",
+        "na": "北美",
+        "latam": "拉美",
+        "uk": "英国",
+        "me": "中东",
+        "apac": "亚太",
+        "other": "其他"
+      },
       "parent": "集团 / 母公司名称，如有"
     },
-    "s2": { "title": "2. 公司联系方式", "website": "官网 / 域名", "email": "公司邮箱", "phone": "联系电话（含国家代码）", "otherContact": "其他联系方式（例如 Telegram、Teams）" },
-    "s3": { "title": "3. 授权联系人", "name": "姓名", "email": "邮箱", "phone": "联系电话（含国家代码）", "otherContact": "其他联系方式（例如 Telegram、Teams）" },
+    "s2": {
+      "title": "2. 公司联系方式",
+      "website": "官网 / 域名",
+      "email": "公司邮箱",
+      "phone": "联系电话（含国家代码）",
+      "otherContact": "其他联系方式（例如 Telegram、Teams）"
+    },
+    "s3": {
+      "title": "3. 授权联系人",
+      "name": "姓名",
+      "email": "邮箱",
+      "phone": "联系电话（含国家代码）",
+      "otherContact": "其他联系方式（例如 Telegram、Teams）"
+    },
     "s4": {
       "title": "4. 董事、最终受益人（UBO）和授权签字人",
       "body": "请添加每一位董事、最终受益人（直接或间接持股或控制 25% 及以上）和授权签字人。同一个人有多个角色时，只需添加一次并勾选全部角色。至少需要 1 名董事和 1 名 UBO。",
@@ -192,7 +347,11 @@
       "add": "添加人员",
       "remove": "删除",
       "roles": "角色",
-      "roleOptions": { "director": "董事", "ubo": "UBO", "signatory": "授权签字人" },
+      "roleOptions": {
+        "director": "董事",
+        "ubo": "UBO",
+        "signatory": "授权签字人"
+      },
       "fullName": "法定全名",
       "dob": "出生日期",
       "nationality": "国籍",
@@ -243,9 +402,17 @@
       "email": "邮箱",
       "wallet": "钱包地址",
       "network": "区块链 / 网络",
-      "networkOptions": { "tron": "TRON", "ethereum": "Ethereum", "other": "其他" },
+      "networkOptions": {
+        "tron": "TRON",
+        "ethereum": "Ethereum",
+        "other": "其他"
+      },
       "use": "钱包用途",
-      "useOptions": { "deposit": "充值", "withdrawal": "提现", "both": "两者" },
+      "useOptions": {
+        "deposit": "充值",
+        "withdrawal": "提现",
+        "both": "两者"
+      },
       "ownershipTitle": "所有权声明",
       "ownership": [
         "本人是上述钱包私钥的唯一所有者，拥有完全且排他的控制权。",
@@ -264,7 +431,11 @@
       ],
       "riskCheck": "我确认以上风险。",
       "proof": "钱包所有权证明",
-      "proofOptions": { "provider": "钱包服务商或交易所截图，显示该地址关联在本企业名下的账户", "explorer": "区块浏览器截图，并附控制权证明（签名消息或我们提供的参考码）", "other": "其他证明文件（请注明）" }
+      "proofOptions": {
+        "provider": "钱包服务商或交易所截图，显示该地址关联在本企业名下的账户",
+        "explorer": "区块浏览器截图，并附控制权证明（签名消息或我们提供的参考码）",
+        "other": "其他证明文件（请注明）"
+      }
     },
     "s7": {
       "title": "7. 声明与签名",
@@ -277,8 +448,29 @@
       "clear": "清除",
       "recorded": "系统会记录签署的日期、时间和 IP 地址。"
     },
-    "done": { "title": "申请已提交", "body": "感谢您的提交。我们已收到您的申请，会尽快审核；如需补充资料，我们会通过邮件联系您。", "readonly": "此申请已无法修改。" },
-    "errors": { "required": "此项为必填项。", "email": "请输入有效的邮箱地址。", "phone": "只能包含数字、空格、+、- 或括号。", "date": "请输入有效的日期。", "future": "护照不能已经过期。", "people": "至少需要 1 名董事和 1 名 UBO。", "roles": "请至少选择一个角色。", "docs": "请上传全部必需文件。", "fileType": "只接受 PDF、JPG 或 PNG 格式。", "fileSize": "每个文件不能超过 10MB。", "signature": "请在框内签名。", "summary": "请修改标出的字段。", "invalid": "此链接无效或已过期，请联系我们获取新的链接。" },
-    "prototype": { "demo": "演示数据" }
+    "done": {
+      "title": "申请已提交",
+      "body": "感谢您的提交。我们已收到您的申请，会尽快审核；如需补充资料，我们会通过邮件联系您。",
+      "readonly": "此申请已无法修改。"
+    },
+    "errors": {
+      "required": "此项为必填项。",
+      "email": "请输入有效的邮箱地址。",
+      "phone": "只能包含数字、空格、+、- 或括号。",
+      "date": "请输入有效的日期。",
+      "future": "护照不能已经过期。",
+      "people": "至少需要 1 名董事和 1 名 UBO。",
+      "roles": "请至少选择一个角色。",
+      "docs": "请上传全部必需文件。",
+      "fileType": "只接受 PDF、JPG 或 PNG 格式。",
+      "fileSize": "每个文件不能超过 10MB。",
+      "signature": "请在框内签名。",
+      "summary": "请修改标出的字段。",
+      "invalid": "此链接无效或已过期，请联系我们获取新的链接。"
+    },
+    "prototype": {
+      "demo": "演示数据"
+    },
+    "locked": "这一部分无需修改。只能修改我们要求补充的部分。"
   }
 }

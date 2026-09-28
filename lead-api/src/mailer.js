@@ -34,6 +34,31 @@ export function createMailSender(config) {
   return config.resendApiKey ? createResendSender(config) : createSmtpSender(config);
 }
 
+/**
+ * 通用发信（v3）：send({ to, subject, text, replyTo })。
+ * 与线索通知共用同一套配置：配置了 RESEND_API_KEY 用 Resend，否则用 SMTP（v3 用 Amos 自己邮箱的 SMTP）。
+ */
+export function createRawSender(config, fetchImpl = fetch) {
+  if (config.resendApiKey) {
+    return async ({ to, subject, text, replyTo }) => {
+      const res = await fetchImpl('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${config.resendApiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ from: config.mailFrom, to: [to], subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
+      });
+      if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    };
+  }
+  const transport = nodemailer.createTransport({
+    host: config.smtp.host, port: config.smtp.port, secure: config.smtp.secure,
+    auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
+    disableFileAccess: true, disableUrlAccess: true,
+  });
+  return async ({ to, subject, text, replyTo }) => {
+    await transport.sendMail({ from: config.mailFrom, to, subject, text, ...(replyTo ? { replyTo } : {}) });
+  };
+}
+
 /** Resend 的 HTTP API（https://resend.com/docs/api-reference/emails/send-email）。 */
 export function createResendSender(config, fetchImpl = fetch) {
   return async (lead) => {

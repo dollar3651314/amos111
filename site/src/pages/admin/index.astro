@@ -4,6 +4,28 @@ import { IS_PROTOTYPE } from '../../lib/env';
 ---
 <AppLayout lang="zh" title="Quick Come 审核后台" badge="审核后台">
   <div id="admin-root" data-prototype={IS_PROTOTYPE ? '1' : undefined}>
+    <!-- 首次初始化 -->
+    <section class="container" data-view="setup" hidden>
+      <form class="card login-card form-card" data-setup novalidate>
+        <h2>初始化审核后台</h2>
+        <p class="hint muted m0">只需要做一次。请输入你在 Vercel 环境变量 ADMIN_SETUP_TOKEN 里设置的初始化口令，并设置后台登录密码（至少 12 位）。</p>
+        <div class="f"><label for="s-token">初始化口令</label><input id="s-token" type="password" autocomplete="off" required /></div>
+        <div class="f"><label for="s-pw">设置登录密码</label><input id="s-pw" type="password" autocomplete="new-password" minlength="12" required /></div>
+        <div class="f"><label for="s-pw2">再次输入密码</label><input id="s-pw2" type="password" autocomplete="new-password" minlength="12" required /></div>
+        <p class="alert" data-setup-err hidden></p>
+        <button class="btn btn-primary" type="submit">下一步</button>
+      </form>
+      <form class="card login-card form-card" data-setup2 novalidate hidden>
+        <h2>绑定手机验证器</h2>
+        <p class="m0">用手机上的验证器 App（例如 Google Authenticator、1Password、Microsoft Authenticator）扫描下面的二维码，然后输入 App 显示的 6 位动态码。</p>
+        <img data-qr alt="验证器二维码" width="220" height="220" class="sig-img" />
+        <p class="hint muted m0">无法扫码时，可以在 App 里手动输入密钥：<code data-secret></code></p>
+        <div class="f"><label for="s-otp">6 位动态码</label><input id="s-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></div>
+        <p class="alert" data-setup2-err hidden></p>
+        <button class="btn btn-primary" type="submit">完成初始化</button>
+      </form>
+    </section>
+
     <!-- 登录 -->
     <section class="container" data-view="login" hidden>
       <form class="card login-card form-card" data-login novalidate>
@@ -12,7 +34,7 @@ import { IS_PROTOTYPE } from '../../lib/env';
         <div class="f"><label for="a-otp">验证器动态码（6 位）</label><input id="a-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required /></div>
         <p class="alert" data-login-err hidden></p>
         <button class="btn btn-primary" type="submit">登录</button>
-        <p class="hint muted m0">连续输错 5 次将锁定 15 分钟。首次使用请打开 /admin/setup/ 完成初始化。</p>
+        <p class="hint muted m0">连续输错 5 次将锁定 15 分钟。</p>
       </form>
     </section>
 

@@ -11,6 +11,7 @@
     "brand:render": "node brand-src/render.mjs"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.0",
     "astro": "^7.3.5"
   },
   "devDependencies": {
