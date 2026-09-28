@@ -87,7 +87,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await admin.click('[data-setup2] button[type="submit"]');
     await expect(admin.locator('[data-view="login"]')).toBeVisible();
     // 已初始化后，不能再次初始化
-    const again = await admin.request.post('/api/admin/setup-begin/', { data: { setupToken: KYB_ENV.ADMIN_SETUP_TOKEN, password: PW } });
+    const again = await admin.request.post('/api/kyb/?g=admin&a=setup-begin', { data: { setupToken: KYB_ENV.ADMIN_SETUP_TOKEN, password: PW } });
     expect(again.status()).toBe(409);
     expect(errs).toEqual([]);
   });
@@ -246,7 +246,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     // 未登录不能下载、不能看列表
     const anon = await admin.context().browser()!.newContext({ baseURL: 'http://127.0.0.1:8080' });
     expect((await anon.request.get(href!)).status()).toBe(401);
-    expect((await anon.request.get('/api/admin/apps/')).status()).toBe(401);
+    expect((await anon.request.get('/api/kyb/?g=admin&a=apps')).status()).toBe(401);
     await anon.close();
   });
 
@@ -322,7 +322,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await expect(page.locator('[data-ob-invalid]')).toBeVisible();
     await page.goto('/onboarding/');
     await expect(page.locator('[data-ob-invalid]')).toBeVisible();
-    const r = await page.request.get('/api/onboarding/state/', { headers: { 'x-kyb-token': 'nope' } });
+    const r = await page.request.get('/api/kyb/?g=onboarding&a=state', { headers: { 'x-kyb-token': 'nope' } });
     expect(r.status()).toBe(404);
   });
 
@@ -337,15 +337,15 @@ test.describe.serial('TC-K v3 在线开户', () => {
   test('TC-K12 AC-K8 跨站请求（Origin 不一致）被拒绝', async () => {
     // 浏览器不允许脚本伪造 Origin，所以这里直接带上会话 Cookie 从测试端发请求
     const c = (await adminCtx.cookies()).find((x) => x.name === 'qc_admin')!;
-    const r = await fetch('http://127.0.0.1:8080/api/admin/invite/', { method: 'POST', headers: { 'content-type': 'application/json', cookie: `qc_admin=${c.value}`, origin: 'https://evil.example' }, body: JSON.stringify({ company: 'X', email: 'x@x.com' }) });
+    const r = await fetch('http://127.0.0.1:8080/api/kyb/?g=admin&a=invite', { method: 'POST', headers: { 'content-type': 'application/json', cookie: `qc_admin=${c.value}`, origin: 'https://evil.example' }, body: JSON.stringify({ company: 'X', email: 'x@x.com' }) });
     expect(r.status).toBe(403);
-    const same = await fetch('http://127.0.0.1:8080/api/admin/apps/', { headers: { cookie: `qc_admin=${c.value}` } });
+    const same = await fetch('http://127.0.0.1:8080/api/kyb/?g=admin&a=apps', { headers: { cookie: `qc_admin=${c.value}` } });
     expect(same.status).toBe(200); // 同一个 Cookie 的正常请求可以通过，说明 403 来自 Origin 检查
   });
 
   test('TC-K14 AC-K11 AC-K5 切换语言不丢失未保存的内容；超过 10MB 的文件被拒绝', async ({ browser }) => {
     const email = 'lang-switch@mekong.example';
-    const r = await admin.evaluate(async (em) => (await fetch('/api/admin/invite/', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ company: 'Lang Switch Co', email: em }) })).status, email);
+    const r = await admin.evaluate(async (em) => (await fetch('/api/kyb/?g=admin&a=invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ company: 'Lang Switch Co', email: em }) })).status, email);
     expect(r).toBe(200);
     const link = linkIn(mailsTo(email).at(-1)!);
     const ctx = await browser.newContext({ baseURL: 'http://127.0.0.1:8080' });
@@ -358,14 +358,19 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await expect(page.locator('[data-step="0"] h2')).toHaveText(/企业信息/);
     // 超过 10MB：服务端拒绝（前端也会提示）
     const token = new URL(link).searchParams.get('t')!;
-    const big = await fetch('http://127.0.0.1:8080/api/onboarding/local-upload/?doc=d1', { method: 'POST', headers: { 'x-kyb-token': token, 'content-type': 'application/pdf' }, body: Buffer.alloc(10 * 1024 * 1024 + 1) });
+    const big = await fetch('http://127.0.0.1:8080/api/kyb/?g=onboarding&a=local-upload&doc=d1', { method: 'POST', headers: { 'x-kyb-token': token, 'content-type': 'application/pdf' }, body: Buffer.alloc(10 * 1024 * 1024 + 1) });
     expect(big.status).toBe(413);
     await ctx.close();
   });
 
+  test('TC-K17 BUG-K7 旧的接口地址已不存在（与线上一致返回 404）', async ({ request }) => {
+    expect((await request.get('/api/admin/me/')).status()).toBe(404);
+    expect((await request.get('/api/kyb/?g=nope&a=me')).status()).toBe(404);
+  });
+
   test('TC-K13 AC-K8 连续输错 5 次后锁定（放在最后执行）', async ({ request }) => {
-    for (let i = 0; i < 5; i++) expect((await request.post('/api/admin/login/', { data: { password: 'wrong', code: '000000' } })).status()).toBe(401);
-    const r = await request.post('/api/admin/login/', { data: { password: PW, code: totpCode(totpSecret, Date.now()) } });
+    for (let i = 0; i < 5; i++) expect((await request.post('/api/kyb/?g=admin&a=login', { data: { password: 'wrong', code: '000000' } })).status()).toBe(401);
+    const r = await request.post('/api/kyb/?g=admin&a=login', { data: { password: PW, code: totpCode(totpSecret, Date.now()) } });
     expect(r.status()).toBe(429);
   });
 });

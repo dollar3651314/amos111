@@ -4,7 +4,7 @@
 //   read(pathname)      → { stream, contentType, size } 或 null
 //   put(pathname, bytes, contentType)
 //   del(pathnames[])
-// 生产环境使用 Vercel Blob 私有存储（浏览器凭一次性凭证直传，见 api/onboarding/upload.js）；
+// 生产环境使用 Vercel Blob 私有存储（浏览器凭一次性凭证直传，见 api/kyb.js 的 onboarding / upload）；
 // 本地和测试环境使用一个本地目录模拟，上传走 local-upload 接口。
 import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { join, dirname, normalize } from 'node:path';

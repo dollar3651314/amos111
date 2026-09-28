@@ -1,4 +1,4 @@
-// 客户填写页面的接口：/api/onboarding/<动作>/，全部凭链接里的令牌（请求头 x-kyb-token）访问本人申请。
+// 客户填写页面的接口：/api/kyb/?g=onboarding&a=<动作>，全部凭链接里的令牌（请求头 x-kyb-token）访问本人申请。
 import { randomBytes } from 'node:crypto';
 import { json, readJson, actionOf, originOf } from './http.js';
 import { validateSection, validateForSubmit, DOC_IDS, FILE_TYPES, MAX_FILE_BYTES, SECTIONS } from './schema.js';
@@ -77,7 +77,7 @@ export function createOnboardingHandler({ repo, blobs, send, config, now = () =>
           if (!pathname.startsWith(`kyb/${app.id}/`)) throw new Error('invalid_pathname');
           return { allowedContentTypes: FILE_TYPES, maximumSizeInBytes: MAX_FILE_BYTES, addRandomSuffix: true, tokenPayload: app.id };
         },
-        onUploadCompleted: async () => {}, // 文件由浏览器随后调用 file 接口登记，并由服务端核实
+        // 不设置 onUploadCompleted：上传完成后由浏览器调用 file 接口登记，服务端再核实文件，不需要 Blob 回调
       });
       return json(200, result);
     },
