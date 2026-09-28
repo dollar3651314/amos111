@@ -54,10 +54,10 @@ function setup() {
 }
 
 const fullForm = () => ({
-  entity: { legalName: 'Acme Export Limited', legalForm: 'Ltd', regNumber: '202012345K', incDate: '2020-04-18', incPlace: 'Singapore', regAddress: '10 Anson Road', physAddress: '10 Anson Road', nature: ['export'], purpose: 'deposits', volume: 'lt50k', markets: ['apac'] },
+  entity: { legalName: 'Acme Export Limited', legalForm: 'Ltd', regNumber: '202012345K', incDate: '2020-04-18', incPlace: 'Singapore', regAddress: '10 Anson Road', physAddress: '10 Anson Road', nature: ['export'], purpose: ['deposits'], volume: 'lt50k', currencies: ['usdt'], markets: ['apac'], sanctions: 'no' },
   contact: { website: 'acme.example', email: 'ops@acme.example', phone: '+65 6000 1234' },
   rep: { name: 'Jane Tan', email: 'jane@acme.example', phone: '+65 9000 1111' },
-  people: [{ pid: '0', roles: ['director', 'ubo'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'SG', residence: 'SG', address: '8 Demo St', passportNo: 'K7654321Z', passportCountry: 'SG', passportExpiry: '2031-05-01', pep: 'no', email: 'jane@acme.example', phone: '+65 9000 1111' }],
+  people: [{ pid: '0', roles: ['director', 'ubo'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'SG', residence: 'SG', address: '8 Demo St', passportNo: 'K7654321Z', passportCountry: 'SG', passportExpiry: '2031-05-01', ownershipPct: '100', votingPct: '100', pep: 'no', email: 'jane@acme.example', phone: '+65 9000 1111' }],
   wallet: { clientName: 'Acme Export Limited', idTypeNo: 'Reg 202012345K', email: 'ops@acme.example', address: 'TXYZ123', network: 'tron', use: 'both', ownershipOk: true, riskOk: true, proofType: 'provider' },
   decl: { repName: 'Jane Tan', position: 'Director', confirm: true },
 });
@@ -262,5 +262,65 @@ test('原始存储中的申请记录只有明文的编号、状态、企业名�
     const raw = s.redis.raw().kv[`qc:app:${app.id}`];
     assert.ok(raw.includes('Visible Co')); assert.ok(!raw.includes('secret-mail@x.com'));
     assert.equal(decryptJson(s.keys.enc, JSON.parse(raw).enc).email, 'secret-mail@x.com');
+  } finally { s.done(); }
+});
+
+test('v4：制裁声明选"是"时，列表里有明文标记，但不含说明内容（AC-V2、AC-V7）', async () => {
+  const s = setup();
+  try {
+    await s.login();
+    await s.admin('invite/', { company: 'Flag Co', email: 'flag@x.com' });
+    const c = s.client(s.tokenFrom(s.mails.at(-1)));
+    const f = fullForm();
+    f.entity = { ...f.entity, sanctions: 'yes', sanctionsDetails: 'SECRET-SANCTION-DETAIL region' };
+    for (const sec of ['entity', 'contact', 'rep', 'people', 'wallet', 'decl']) assert.equal((await c('save/', { section: sec, data: f[sec] }))[0], 200, sec);
+    for (const d of ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'walletProof']) assert.equal((await upload(c, d))[0], 200, d);
+    for (const d of ['passport', 'poa']) assert.equal((await upload(c, d, '0', 'image/png'))[0], 200, d);
+    assert.equal((await c('submit/', { signature: PNG }))[0], 200);
+    const [, list] = await s.admin('apps/');
+    assert.deepEqual(list.apps[0].flags, { sanctions: true });
+    assert.ok(!JSON.stringify(s.redis.raw()).includes('SECRET-SANCTION-DETAIL'), '说明内容必须加密');
+    // 第 11、12 项不能再上传（AC-V6）
+    await s.admin('decide/', { id: list.apps[0].id, action: 'needs_info', sections: ['docs'], message: 'x' });
+    const c2 = s.client(s.tokenFrom(s.mails.at(-1)));
+    assert.equal((await upload(c2, 'd11'))[0], 400);
+    assert.equal((await upload(c2, 'd13'))[0], 200);
+  } finally { s.done(); }
+});
+
+test('v4：v3 格式的旧申请——已提交的在后台照常显示；填写中的必须补填新字段才能提交（AC-V8，TPV2）', async () => {
+  const s = setup();
+  try {
+    await s.login();
+    const v3 = fullForm();
+    // 按 v3 的数据结构直接写入存储：业务用途是单选字符串，没有币种、制裁、持股比例
+    v3.entity = { ...v3.entity, purpose: 'deposits', volume: '50k-100k' };
+    delete v3.entity.currencies; delete v3.entity.sanctions;
+    v3.people = v3.people.map(({ ownershipPct, votingPct, ...p }) => p);
+    const done = await s.repo.create({ company: 'Old Submitted', email: 'old@x.com' });
+    const p1 = s.repo.open(done.app); p1.form = v3; p1.files = [{ id: 'old11', doc: 'd11', name: 'funding.pdf', size: 10, type: 'application/pdf', pathname: `kyb/${done.app.id}/f.pdf` }];
+    done.app.status = 'submitted'; await s.repo.seal(done.app, p1);
+    const [, detail] = await s.admin(`app/?id=${done.app.id}`);
+    assert.equal(detail.form.entity.purpose, 'deposits');
+    assert.equal(detail.form.entity.currencies, undefined); // 后台显示"（v3 提交，没有此项）"
+    assert.equal(detail.files[0].doc, 'd11'); // 旧版文件项照常列出
+    const [, list] = await s.admin('apps/');
+    assert.deepEqual(list.apps.find((a) => a.id === done.app.id).flags, {});
+
+    const wip = await s.repo.create({ company: 'Old Draft', email: 'draft@x.com' });
+    const p2 = s.repo.open(wip.app); p2.form = v3; wip.app.status = 'in_progress'; await s.repo.seal(wip.app, p2);
+    const c = s.client(wip.token);
+    for (const d of ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'walletProof']) assert.equal((await upload(c, d))[0], 200, d);
+    for (const d of ['passport', 'poa']) assert.equal((await upload(c, d, '0', 'image/png'))[0], 200, d);
+    const [st, body] = await c('submit/', { signature: PNG });
+    assert.equal(st, 400);
+    for (const k of ['entity.currencies', 'entity.sanctions', 'people.0.ownershipPct', 'people.0.votingPct']) assert.equal(body.fields[k], 'required', k);
+    // 补填以后可以提交；旧的单选业务用途自动变成多选
+    const f = fullForm();
+    assert.equal((await c('save/', { section: 'entity', data: { ...v3.entity, currencies: ['usd'], sanctions: 'no' } }))[0], 200);
+    assert.equal((await c('save/', { section: 'people', data: f.people }))[0], 200);
+    assert.equal((await c('submit/', { signature: PNG }))[0], 200);
+    const [, d2] = await s.admin(`app/?id=${wip.app.id}`);
+    assert.deepEqual(d2.form.entity.purpose, ['deposits']);
   } finally { s.done(); }
 });

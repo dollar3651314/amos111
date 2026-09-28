@@ -84,3 +84,37 @@ test('提交校验：必传文件（企业 1 到 6 项、每人护照和地址�
   const e2 = validateForSubmit(form, files, now);
   assert.equal(Object.keys(e2).filter((k) => k.startsWith('docs.')).length, 0);
 });
+
+// ---------- v4 字段规则 ----------
+import { validateSection as vs4 } from '../src/kyb/schema.js';
+const base4 = { legalName: 'A', legalForm: 'Ltd', regNumber: '1', incDate: '2020-01-01', incPlace: 'SG', regAddress: 'a', physAddress: 'a', nature: ['export'], purpose: ['crypto', 'deposits'], volume: 'lt50k', currencies: ['usd'], markets: ['apac'], sanctions: 'no' };
+const person4 = { pid: '0', roles: ['director', 'ubo'], fullName: 'A', dob: '1980-01-01', nationality: 'SG', residence: 'SG', address: 'a', passportNo: 'X', passportCountry: 'SG', passportExpiry: '2099-01-01', ownershipPct: '51.5', votingPct: '100', pep: 'no', email: 'a@x.com', phone: '+65 1234' };
+test('v4 企业信息：币种必填；选"其他"要注明（AC-V1）', () => {
+  assert.deepEqual(vs4('entity', base4, { strict: true }).errors, {});
+  assert.equal(vs4('entity', { ...base4, currencies: [] }, { strict: true }).errors['entity.currencies'], 'required');
+  assert.equal(vs4('entity', { ...base4, currencies: ['other'] }, { strict: true }).errors['entity.currenciesOther'], 'required');
+  assert.equal(vs4('entity', { ...base4, currencies: ['doge'] }, { strict: true }).errors['entity.currencies'], 'invalid');
+});
+test('v4 企业信息：制裁声明必填；选"是"要写说明，选"否"时说明被清空（AC-V2）', () => {
+  assert.equal(vs4('entity', { ...base4, sanctions: '' }, { strict: true }).errors['entity.sanctions'], 'required');
+  assert.equal(vs4('entity', { ...base4, sanctions: 'yes' }, { strict: true }).errors['entity.sanctionsDetails'], 'required');
+  assert.deepEqual(vs4('entity', { ...base4, sanctions: 'yes', sanctionsDetails: 'x' }, { strict: true }).errors, {});
+  assert.equal(vs4('entity', { ...base4, sanctionsDetails: 'x' }, { strict: true }).data.sanctionsDetails, '');
+});
+test('v4 企业信息：业务用途多选，兼容 v3 的单选值；月交易量没有"其他"，50 万以上要写金额（AC-V4、AC-V5、AC-V8）', () => {
+  assert.deepEqual(vs4('entity', { ...base4, purpose: 'deposits' }, { strict: true }).data.purpose, ['deposits']);
+  assert.equal(vs4('entity', { ...base4, purpose: ['other'] }, { strict: true }).errors['entity.purposeOther'], 'required');
+  assert.equal(vs4('entity', { ...base4, volume: 'other' }, { strict: true }).errors['entity.volume'], 'invalid');
+  assert.equal(vs4('entity', { ...base4, volume: 'gt500k' }, { strict: true }).errors['entity.volumeAmount'], 'required');
+  assert.deepEqual(vs4('entity', { ...base4, volume: 'gt500k', volumeAmount: 'USD 1m' }, { strict: true }).errors, {});
+  assert.equal(vs4('entity', { ...base4, volumeAmount: 'USD 1m' }, { strict: true }).data.volumeAmount, '');
+});
+test('v4 人员：UBO 必填持股和投票权比例（0 到 100，最多 2 位小数）；不是 UBO 时不保存（AC-V3，TPV1、TPV4）', () => {
+  assert.deepEqual(vs4('people', [person4], { strict: true }).errors, {});
+  for (const bad of ['101', '-1', 'abc', '50.123', '100.5']) assert.equal(vs4('people', [{ ...person4, ownershipPct: bad }], { strict: true }).errors['people.0.ownershipPct'], 'percent', bad);
+  for (const ok of ['0', '100', '100.00', '25', '33.33']) assert.equal(vs4('people', [{ ...person4, votingPct: ok }], { strict: true }).errors['people.0.votingPct'], undefined, ok);
+  assert.equal(vs4('people', [{ ...person4, votingPct: '' }], { strict: true }).errors['people.0.votingPct'], 'required');
+  const notUbo = vs4('people', [{ ...person4, roles: ['director'], ownershipPct: '999' }, { ...person4, pid: '1' }], { strict: true });
+  assert.equal(notUbo.data[0].ownershipPct, ''); assert.equal(notUbo.data[0].votingPct, '');
+  assert.equal(notUbo.errors['people.0.ownershipPct'], undefined);
+});

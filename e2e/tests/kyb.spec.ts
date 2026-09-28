@@ -101,6 +101,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await login(admin);
     // BUG-K9：导航上的数字登录后立即显示，0 也显示为"0"
     await expect(admin.locator('[data-count="apps"]')).toHaveText('0');
+    await expect(admin.locator('[data-apps-body]')).toContainText('暂无申请'); // 空状态（AC-V10）
     await expect(admin.locator('[data-count="leads"]')).toHaveText(/^\d+$/); // 前面的用例已经提交过线索
     leadsBefore = Number(await admin.locator('[data-count="leads"]').textContent());
     await expect(admin.locator('[data-count="apps"]')).toHaveAttribute('title', '待审核（已提交）：0');
@@ -153,8 +154,25 @@ test.describe.serial('TC-K v3 在线开户', () => {
     });
     await page.check('[name="entity.nature"][value="export"]');
     await page.check('[name="entity.purpose"][value="deposits"]');
-    await page.check('[name="entity.volume"][value="50k-100k"]');
+    await page.check('[name="entity.purpose"][value="crypto"]'); // v4：多选（AC-V4）
+    // v4：月交易量没有"其他"；选 50 万以上要写金额（AC-V5）
+    await expect(page.locator('[name="entity.volume"][value="other"]')).toHaveCount(0);
+    await page.check('[name="entity.volume"][value="gt500k"]');
+    await page.click('[data-next]');
+    await expect(page.locator('[data-err-for="entity.volumeAmount"]')).not.toBeEmpty();
+    await page.fill('[name="entity.volumeAmount"]', 'USD 800,000');
+    // v4：币种必填，选"其他"要注明（AC-V1）
+    await expect(page.locator('[data-err-for="entity.currencies"]')).not.toBeEmpty();
+    await page.check('[name="entity.currencies"][value="usdt"]');
+    await page.check('[name="entity.currencies"][value="other"]');
+    await page.fill('[name="entity.currenciesOther"]', 'TRX');
     await page.check('[name="entity.markets"][value="apac"]');
+    // v4：制裁声明必填，选"是"要写说明（AC-V2）
+    await expect(page.locator('[data-err-for="entity.sanctions"]')).not.toBeEmpty();
+    await page.check('[name="entity.sanctions"][value="yes"]');
+    await page.click('[data-next]');
+    await expect(page.locator('[data-err-for="entity.sanctionsDetails"]')).not.toBeEmpty();
+    await page.fill('[name="entity.sanctionsDetails"]', 'SANCTION-DETAIL-E2E: limited exposure, under USD 5,000 per month');
     await next(page, 1);
 
     // 离开后用同一链接回来，已填内容还在（AC-K3）
@@ -171,13 +189,23 @@ test.describe.serial('TC-K v3 在线开户', () => {
     // ④ 人员：至少一名董事和一名最终受益人
     const p = page.locator('[data-person]').first();
     await p.locator('[name$=".roles"][value="director"]').check();
+    await expect(p.locator('[data-ubo-fields]')).toBeHidden(); // v4：不是 UBO 时不显示持股比例（AC-V3）
     await p.locator('[name$=".roles"][value="ubo"]').check();
+    await expect(p.locator('[data-ubo-fields]')).toBeVisible();
+    await p.locator('[name$=".ownershipPct"]').fill('120');
+    await p.locator('[name$=".votingPct"]').fill('75.5');
     for (const [k, v] of Object.entries({ fullName: 'Nguyen Thi Lan', dob: '1985-06-01', nationality: 'Vietnam', residence: 'Vietnam', address: '5 Le Loi, District 1', passportNo: 'C9876543', passportCountry: 'Vietnam', passportExpiry: '2032-01-31', email: CLIENT, phone: '+84 90 123 4567' }))
       await p.locator(`[name$=".${k}"]`).fill(v);
     await p.locator('[name$=".pep"][value="yes"]').check();
     await expect(p.locator('[data-pep-details]')).toBeVisible(); // 选"是"时要求说明
     await p.locator('[name$=".pep"][value="no"]').check();
+    await page.click('[data-next]');
+    await expect(p.locator('[data-err-for$=".ownershipPct"]')).toHaveText(/0 to 100/);
+    await p.locator('[name$=".ownershipPct"]').fill('75.5');
     await next(page, 4);
+    // v4：第 ⑤ 步不再有第 11、12 项（AC-V6）
+    await expect(page.locator('[data-doc="d11"], [data-doc="d12"]')).toHaveCount(0);
+    await expect(page.locator('[data-step="4"]')).not.toContainText('Appendix');
 
     // ⑤ 文件：缺必填文件时不能继续；类型不对被拒绝
     await page.click('[data-next]');
@@ -228,7 +256,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
   test('TC-K05 AC-K10 存储中只有密文：护照号、地址、邮箱、钱包地址都不以明文出现', async () => {
     const raw = readFileSync(resolve(DATA_MAIN, 'kyb-redis.json'), 'utf8');
     expect(raw).toContain(ref);
-    for (const s of ['C9876543', '5 Le Loi', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', 'Mekong Export Company Limited', 'Nguyen Thi Lan']) expect(raw).not.toContain(s);
+    for (const s of ['C9876543', '5 Le Loi', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE', 'Mekong Export Company Limited', 'Nguyen Thi Lan', 'SANCTION-DETAIL-E2E', 'USD 800,000']) expect(raw).not.toContain(s); // v4 新字段同样加密（AC-V9）
   });
 
   test('TC-K06 AC-K9 后台查看完整资料、下载文件、查看签名', async () => {
@@ -238,8 +266,12 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await expect(admin.locator('[data-count="leads"]')).toHaveText(String(leadsBefore)); // 新线索已发送链接，未发送的数量不变
     const row = admin.locator(`[data-apps-body] tr[data-ref="${ref}"]`);
     await expect(row).toContainText('已提交');
+    await expect(row).toContainText('涉及制裁：是'); // v4：红色标记（AC-V7）
     await row.click();
     await expect(admin.locator('[data-detail-sections]')).toContainText('Mekong Export Company Limited');
+    const sections = admin.locator('[data-detail-sections]');
+    await expect(sections.locator('.flag-sanctions')).toBeVisible();
+    for (const t of ['USDT、其他：TRX', 'USD 800,000', 'SANCTION-DETAIL-E2E', '75.5%', '接受客户的加密货币付款']) await expect(sections).toContainText(t);
     await expect(admin.locator('[data-detail-sections]')).toContainText('C9876543');
     await expect(admin.locator('[data-side]')).toContainText(CLIENT);
     const sig = admin.getByRole('img', { name: '客户手写签名' });

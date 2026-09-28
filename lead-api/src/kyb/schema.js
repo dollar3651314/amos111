@@ -1,7 +1,8 @@
 // 开户资料的服务端校验。规则与前端（site/src/scripts/onboarding.ts）一致；服务端是最终依据（AC-K4、AC-K5）。
 export const SECTIONS = ['entity', 'contact', 'rep', 'people', 'docs', 'wallet', 'decl'];
 export const COMPANY_DOCS_REQUIRED = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
-export const COMPANY_DOCS_OPTIONAL = ['d10', 'd11', 'd12', 'd13', 'd14', 'd15', 'd16'];
+// v4：删除第 11、12 项（资金来源类证明）。已上传的旧文件保留在申请里，后台照常可以下载
+export const COMPANY_DOCS_OPTIONAL = ['d10', 'd13', 'd14', 'd15', 'd16'];
 export const DOC_IDS = new Set([...COMPANY_DOCS_REQUIRED, ...COMPANY_DOCS_OPTIONAL, 'passport', 'poa', 'walletProof']);
 export const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -10,6 +11,8 @@ export const MAX_PEOPLE = 30;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[0-9+\-() ]{5,40}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// 0 到 100，最多 2 位小数（UBO 的持股比例和投票权比例）
+const PCT_RE = /^(100(\.0{1,2})?|\d{1,2}(\.\d{1,2})?)$/;
 const CTRL_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
 const F = (type, required, extra = {}) => ({ type, required, ...extra });
@@ -18,9 +21,12 @@ const ENTITY = {
   incDate: F('date', true, { past: true }), incPlace: F('text', true), regAddress: F('long', true), physAddress: F('long', true),
   lei: F('text', false), tin: F('text', false),
   nature: F('multi', true, { options: ['export', 'manufacturing', 'b2b', 'cfd', 'securities', 'fx', 'other'] }), natureOther: F('text', false),
-  purpose: F('choice', true, { options: ['deposits', 'other'] }), purposeOther: F('text', false),
-  volume: F('choice', true, { options: ['lt50k', '50k-100k', '100k-500k', 'gt500k', 'other'] }), volumeOther: F('text', false),
+  // v4：业务用途改为 4 个选项、多选；月交易量去掉"其他"，50 万以上要写金额；新增币种和制裁声明
+  purpose: F('multi', true, { options: ['crypto', 'exchange', 'deposits', 'other'] }), purposeOther: F('text', false),
+  volume: F('choice', true, { options: ['lt50k', '50k-100k', '100k-500k', 'gt500k'] }), volumeAmount: F('text', false),
+  currencies: F('multi', true, { options: ['usd', 'eur', 'usdt', 'usdc', 'btc', 'eth', 'other'] }), currenciesOther: F('text', false),
   markets: F('multi', true, { options: ['europe', 'na', 'latam', 'uk', 'me', 'apac', 'other'] }), marketsOther: F('text', false),
+  sanctions: F('choice', true, { options: ['yes', 'no'] }), sanctionsDetails: F('long', false),
   parent: F('text', false),
 };
 const CONTACT = { website: F('text', true), email: F('email', true), phone: F('tel', true), otherContact: F('text', false) };
@@ -28,7 +34,9 @@ const REP = { name: F('text', true), email: F('email', true), phone: F('tel', tr
 const PERSON = {
   roles: F('multi', true, { options: ['director', 'ubo', 'signatory'] }), fullName: F('text', true), dob: F('date', true, { past: true }),
   nationality: F('text', true), residence: F('text', true), address: F('long', true), passportNo: F('text', true),
-  passportCountry: F('text', true), passportExpiry: F('date', true, { future: true }), pep: F('choice', true, { options: ['yes', 'no'] }),
+  passportCountry: F('text', true), passportExpiry: F('date', true, { future: true }),
+  ownershipPct: F('percent', false), votingPct: F('percent', false), // v4：勾选 UBO 时必填
+  pep: F('choice', true, { options: ['yes', 'no'] }),
   pepDetails: F('long', false), email: F('email', true), phone: F('tel', true),
 };
 const WALLET = {
@@ -48,6 +56,7 @@ function clean(spec, v, { strict, today }) {
   switch (spec.type) {
     case 'bool': return [v === true, v === true ? null : 'invalid'];
     case 'multi': {
+      if (typeof v === 'string') v = [v]; // v3 的单选值（例如业务用途 "deposits"）按一个选项处理
       if (!Array.isArray(v) || v.some((x) => !spec.options.includes(x))) return [[], 'invalid'];
       return [[...new Set(v)], null];
     }
@@ -58,6 +67,7 @@ function clean(spec, v, { strict, today }) {
       const max = spec.type === 'long' ? 2000 : 300;
       if (s.length > max) return [s.slice(0, max), 'length'];
       if (CTRL_RE.test(s) || (spec.type !== 'long' && /[\r\n]/.test(s))) return ['', 'invalid'];
+      if (spec.type === 'percent' && !PCT_RE.test(s)) return [s, 'percent'];
       if (spec.type === 'email' && !EMAIL_RE.test(s)) return [s, strict ? 'email' : null];
       if (spec.type === 'tel' && !PHONE_RE.test(s)) return [s, strict ? 'phone' : null];
       if (spec.type === 'date') {
@@ -103,6 +113,10 @@ export function validateSection(section, input, { strict = false, now = Date.now
       const o = cleanGroup(PERSON, p, opts, `people.${i}`, errors);
       o.pid = typeof p?.pid === 'string' && /^[a-z0-9]{1,16}$/.test(p.pid) ? p.pid : String(i);
       if (strict && o.pep === 'yes' && !o.pepDetails) errors[`people.${i}.pepDetails`] = 'required';
+      // v4：只有 UBO 填写持股比例和投票权比例；不是 UBO 时清空，不保存
+      if (o.roles.includes('ubo')) {
+        for (const k of ['ownershipPct', 'votingPct']) if (strict && !o[k]) errors[`people.${i}.${k}`] = 'required';
+      } else { o.ownershipPct = ''; o.votingPct = ''; delete errors[`people.${i}.ownershipPct`]; delete errors[`people.${i}.votingPct`]; }
       return o;
     });
     if (strict) {
@@ -111,7 +125,13 @@ export function validateSection(section, input, { strict = false, now = Date.now
     return { data, errors };
   }
   if (!SCHEMA[section]) return { data: null, errors: { _section: 'invalid' } };
-  return { data: cleanGroup(SCHEMA[section], input, opts, section, errors), errors };
+  const data = cleanGroup(SCHEMA[section], input, opts, section, errors);
+  if (section === 'entity') {
+    // v4：按选择才需要填写的字段；不适用时清空
+    if (data.volume === 'gt500k') { if (strict && !data.volumeAmount) errors['entity.volumeAmount'] = 'required'; } else data.volumeAmount = '';
+    if (data.sanctions === 'yes') { if (strict && !data.sanctionsDetails) errors['entity.sanctionsDetails'] = 'required'; } else data.sanctionsDetails = '';
+  }
+  return { data, errors };
 }
 
 /** 提交前的整体校验：全部步骤 + 必传文件 */

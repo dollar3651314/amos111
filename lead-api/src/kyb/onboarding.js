@@ -150,6 +150,8 @@ export function createOnboardingHandler({ repo, blobs, send, config, now = () =>
       p.review.received = p.review.received || new Date(now()).toISOString();
       app.status = 'submitted';
       app.submittedAt = new Date(now()).toISOString();
+      // v4：制裁声明选"是"时，在明文记录里留一个标记（只是是 / 否，不含说明内容），后台列表用红色标出
+      app.flags = { sanctions: p.form?.entity?.sanctions === 'yes' };
       app.unlocked = [];
       await repo.seal(app, p);
       await repo.audit(app.id, 'client', resubmit ? 'resubmitted' : 'submitted');

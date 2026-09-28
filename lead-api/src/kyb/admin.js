@@ -25,7 +25,7 @@ export function createAdminHandler({ repo, blobs, send, redis, keys, config, now
     if (paths.length && blobs) await blobs.del(paths);
     await repo.remove(app);
   }
-  const summary = (a) => ({ id: a.id, ref: a.ref, company: a.company, status: repo.effectiveStatus(a), updatedAt: a.updatedAt, createdAt: a.createdAt, submittedAt: a.submittedAt, expiresAt: a.expiresAt, retentionUntil: a.retentionUntil, fileCount: a.fileCount });
+  const summary = (a) => ({ id: a.id, ref: a.ref, company: a.company, status: repo.effectiveStatus(a), updatedAt: a.updatedAt, createdAt: a.createdAt, submittedAt: a.submittedAt, expiresAt: a.expiresAt, retentionUntil: a.retentionUntil, fileCount: a.fileCount, flags: a.flags || {} });
   const need = async (request) => {
     const admin = await getAdmin();
     if (!admin || !readSession(keys.session, request.headers.get('cookie'), admin.version, now())) throw Object.assign(new Error('unauthorized'), { status: 401 });
