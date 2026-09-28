@@ -25,6 +25,7 @@ fi
 
 echo "测试环境检查 $BASE"
 health=$(req "$BASE/api/health/")
+echo "  健康检查的返回（只有是 / 否，不含配置值）：$health"
 check "健康检查：ok 为 true" "echo '$health' | grep -q '\"ok\":true'"
 check "健康检查：env 是 staging（不是生产）" "echo '$health' | grep -q '\"env\":\"staging\"'"
 for p in / /solutions/ /how-it-works/ /security/ /about/ /contact/ /privacy/ /terms/ /onboarding/ /admin/; do
