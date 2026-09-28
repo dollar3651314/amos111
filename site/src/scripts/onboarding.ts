@@ -41,6 +41,8 @@ let personSeq = 0;
 let editable = new Set(STEP_SECTION);
 let files: FileRec[] = [];
 const PHONE_RE = /^[0-9+\-() ]{5,40}$/;
+// 0 到 100，最多 2 位小数（v4：UBO 的持股比例和投票权比例）
+const PCT_RE = /^(100(\.0{1,2})?|\d{1,2}(\.\d{1,2})?)$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const token = new URLSearchParams(location.search).get('t') || '';
 
@@ -112,7 +114,7 @@ function valueOf(f: HTMLElement): any {
 function setValue(f: HTMLElement, v: any) {
   const name = f.dataset.field!;
   const type = f.dataset.type;
-  if (type === 'checkboxes') f.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((i) => (i.checked = Array.isArray(v) && v.includes(i.value)));
+  if (type === 'checkboxes') { const arr = Array.isArray(v) ? v : v ? [v] : []; f.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((i) => (i.checked = arr.includes(i.value))); } // v3 的单选值（字符串）按一个选项处理
   else if (type === 'radios') f.querySelectorAll<HTMLInputElement>(`input[name="${name}"]`).forEach((i) => (i.checked = i.value === v));
   else if (type === 'check') f.querySelector<HTMLInputElement>('input')!.checked = v === true;
   else { const i = f.querySelector<HTMLInputElement>(`[name="${name}"]`); if (i) i.value = v ?? ''; }
@@ -123,6 +125,10 @@ function syncOther(f: HTMLElement) {
   const other = f.querySelector<HTMLInputElement>(`[data-other-for="${name}"]`);
   if (other) { const v = valueOf(f); other.hidden = !(Array.isArray(v) ? v.includes('other') : v === 'other'); }
   if (name.endsWith('.pep')) f.closest('[data-person]')!.querySelector<HTMLElement>('[data-pep-details]')!.hidden = valueOf(f) !== 'yes';
+  // v4：按选择显示的字段（隐藏时不校验，也不保存）
+  if (name.endsWith('.roles')) f.closest('[data-person]')!.querySelector<HTMLElement>('[data-ubo-fields]')!.hidden = !valueOf(f).includes('ubo');
+  if (name === 'entity.volume') form.querySelector<HTMLElement>('[data-cond="volume-amount"]')!.hidden = valueOf(f) !== 'gt500k';
+  if (name === 'entity.sanctions') form.querySelector<HTMLElement>('[data-cond="sanctions-details"]')!.hidden = valueOf(f) !== 'yes';
 }
 /** 读取一个分组的数据：键名为字段名去掉分组前缀，"其他"输入框一并读取 */
 function readGroup(scope: ParentNode, prefix: string) {
@@ -130,7 +136,7 @@ function readGroup(scope: ParentNode, prefix: string) {
   for (const f of scope.querySelectorAll<HTMLElement>(`[data-field^="${prefix}."]`)) {
     const key = f.dataset.field!.slice(prefix.length + 1);
     if (key.includes('.')) continue;
-    out[key] = valueOf(f);
+    out[key] = isConditionallyHidden(f) ? '' : valueOf(f); // 隐藏的条件字段不保存（例如取消勾选 UBO 后的持股比例）
     const other = f.querySelector<HTMLInputElement>(`[data-other-for="${f.dataset.field}"]`);
     if (other) out[`${key}Other`] = other.hidden ? '' : other.value.trim();
   }
@@ -168,6 +174,7 @@ function validateField(f: HTMLElement): boolean {
   else if (!empty && type === 'email' && !EMAIL_RE.test(String(v))) msg = cfg.errors.email;
   else if (!empty && type === 'tel' && !PHONE_RE.test(String(v))) msg = cfg.errors.phone;
   else if (!empty && type === 'date' && Number.isNaN(Date.parse(String(v)))) msg = cfg.errors.date;
+  else if (!empty && type === 'percent' && !PCT_RE.test(String(v))) msg = cfg.errors.percent;
   else if (!empty && name.endsWith('.passportExpiry') && String(v) <= new Date().toISOString().slice(0, 10)) msg = cfg.errors.future;
   const otherInput = f.querySelector<HTMLInputElement>(`[data-other-for="${name}"]`);
   if (!msg && otherInput && !otherInput.hidden && !otherInput.value.trim()) msg = cfg.errors.required;
@@ -469,7 +476,7 @@ btnSubmit.addEventListener('click', async () => {
   const ppl: any[] = Array.isArray(f.people) && f.people.length ? f.people : [{ pid: '0' }];
   for (const p of ppl) { const card = addPerson(String(p.pid)); fillGroup(card, `people.${p.pid}`, p); }
   files = st.files || [];
-  for (const key of ['walletProof', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd10', 'd11', 'd12', 'd13', 'd14', 'd15', 'd16']) renderFiles(key);
+  for (const key of ['walletProof', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd10', 'd13', 'd14', 'd15', 'd16']) renderFiles(key);
   renderPersonDocs();
   applyLocks();
   form.hidden = false;
