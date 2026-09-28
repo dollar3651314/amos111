@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { readJsonl, decodeQP, MAILS, DATA_MAIN, KYB_ENV } from '../stack.mjs';
+import { readJsonl, decodeQP, MAILS, DATA_MAIN, KYB_ENV, ROOT } from '../stack.mjs';
 // @ts-ignore 与后端同一份 TOTP 实现（已用 RFC 6238 测试向量验证）
 import { totpCode } from '../../lead-api/src/kyb/totp.js';
 
@@ -21,6 +21,8 @@ const mailsTo = (addr: string) => readJsonl(MAILS).filter((m: any) => m.to.inclu
 const linkIn = (mail: string) => mail.match(/https?:\/\/[^\s]+\/onboarding\/\?t=[A-Za-z0-9_-]+/)![0];
 const cspErrors = (page: Page) => { const errs: string[] = []; page.on('console', (m) => /Content Security Policy/i.test(m.text()) && errs.push(m.text())); return errs; };
 
+// SHOTS=1 时保存交付说明用的截图（正式构建、真实接口，不是原型）
+const shot = async (page: Page, name: string) => { if (process.env.SHOTS) await page.screenshot({ path: resolve(ROOT, 'assets/v3', `实现-${name}.png`), fullPage: false }); };
 const browserGet = (page: Page, url: string) => page.evaluate(async (u) => {
   const r = await fetch(u, { credentials: 'same-origin' });
   return { status: r.status, disposition: r.headers.get('content-disposition') || '', text: await r.text() };
@@ -202,6 +204,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await sign(page);
     await page.click('[data-submit]');
     await expect(page.locator('[data-ob-done]')).toBeVisible();
+    await shot(page, '客户提交成功');
 
     // 提交后同一链接只能看到"已提交"（AC-K7）
     await page.goto(link);
@@ -233,6 +236,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     const sig = admin.getByRole('img', { name: '客户手写签名' });
     await expect(sig).toBeVisible();
     await expect.poll(() => sig.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0); // 签名图片在 CSP 下能正常加载
+    await admin.setViewportSize({ width: 1280, height: 900 }); await shot(admin, '后台详情-已提交');
     const href = await admin.locator('.file-link a').first().getAttribute('href');
     // 在浏览器里下载（与 Amos 点击链接相同，带 HttpOnly 会话 Cookie）
     const res = await browserGet(admin, href!);
@@ -267,6 +271,8 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await page.goto(link);
     await expect(page.locator('#ob-form')).toBeVisible();
     await expect(page.locator('[name="entity.legalName"]')).toBeDisabled(); // 未开放的部分只读
+    await page.setViewportSize({ width: 375, height: 812 }); await shot(page, '客户补件-直接打开被开放的步骤-手机');
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.click('[data-goto="4"]');
     await expect(page.locator('[data-upload="d1"]')).toBeEnabled();
     await page.setInputFiles('[data-upload="d1"]', { ...PDF, name: 'd1-colour.pdf' });
@@ -287,6 +293,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await admin.getByRole('button', { name: '通过' }).click();
     await confirmDialog(admin);
     await expect(admin.locator('[data-toast]')).toContainText('已通过');
+    await shot(admin, '后台详情-已通过');
     await expect(admin.locator('[data-side]')).toContainText('业务关系存续期间');
     await expect(admin.locator('.timeline-mini')).toContainText('补件');
     await admin.fill('#rv-notes', 'e2e 内部备注');
@@ -336,9 +343,55 @@ test.describe.serial('TC-K v3 在线开户', () => {
     expect(same.status).toBe(200); // 同一个 Cookie 的正常请求可以通过，说明 403 来自 Origin 检查
   });
 
+  test('TC-K14 AC-K11 AC-K5 切换语言不丢失未保存的内容；超过 10MB 的文件被拒绝', async ({ browser }) => {
+    const email = 'lang-switch@mekong.example';
+    const r = await admin.evaluate(async (em) => (await fetch('/api/admin/invite/', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ company: 'Lang Switch Co', email: em }) })).status, email);
+    expect(r).toBe(200);
+    const link = linkIn(mailsTo(email).at(-1)!);
+    const ctx = await browser.newContext({ baseURL: 'http://127.0.0.1:8080' });
+    const page = await ctx.newPage();
+    await page.goto(link);
+    await page.fill('[name="entity.legalName"]', 'Unsaved Before Switch Ltd');
+    await page.click('a[data-keep-query]');
+    await expect(page).toHaveURL(/\/zh\/onboarding\/\?t=.+#step-0$/);
+    await expect(page.locator('[name="entity.legalName"]')).toHaveValue('Unsaved Before Switch Ltd');
+    await expect(page.locator('[data-step="0"] h2')).toHaveText(/企业信息/);
+    // 超过 10MB：服务端拒绝（前端也会提示）
+    const token = new URL(link).searchParams.get('t')!;
+    const big = await fetch('http://127.0.0.1:8080/api/onboarding/local-upload/?doc=d1', { method: 'POST', headers: { 'x-kyb-token': token, 'content-type': 'application/pdf' }, body: Buffer.alloc(10 * 1024 * 1024 + 1) });
+    expect(big.status).toBe(413);
+    await ctx.close();
+  });
+
   test('TC-K13 AC-K8 连续输错 5 次后锁定（放在最后执行）', async ({ request }) => {
     for (let i = 0; i < 5; i++) expect((await request.post('/api/admin/login/', { data: { password: 'wrong', code: '000000' } })).status()).toBe(401);
     const r = await request.post('/api/admin/login/', { data: { password: PW, code: totpCode(totpSecret, Date.now()) } });
     expect(r.status()).toBe(429);
   });
 });
+
+// TC-K15 AC-K14 隐私政策中英两版都有 KYB 数据一节
+for (const [path, title] of [['/privacy/', 'Business onboarding (KYB)'], ['/zh/privacy/', '企业开户资料（KYB）']]) {
+  test(`TC-K15 AC-K14 ${path} 含 KYB 一节`, async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  });
+}
+
+// TC-K16 AC-K15 开户页和后台在三种宽度下没有横向滚动（原型构建，表单可见）
+for (const w of [375, 768, 1280]) {
+  for (const path of ['/onboarding/?t=demo', '/zh/onboarding/?t=demo', '/admin/']) {
+    test(`TC-K16 AC-K15 ${w}px ${path} 无横向滚动`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.goto('http://127.0.0.1:8090' + path);
+      await page.waitForLoadState('networkidle');
+      if (path.includes('onboarding')) {
+        // 前端校验会阻止跳到后面的步骤，所以直接把 7 个步骤同时显示出来，一次检查全部内容
+        await page.evaluate(() => document.querySelectorAll('[data-step]').forEach((e) => e.removeAttribute('hidden')));
+        await expect(page.locator('[data-step="6"]')).toBeVisible();
+        await page.click('[data-add-person]'); // 两个人员卡片
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    });
+  }
+}

@@ -391,7 +391,7 @@
   },
   "legal": {
     "updatedLabel": "Last updated",
-    "updated": "2026-09-27"
+    "updated": "2026-09-28"
   },
   "privacy": {
     "heading": "Privacy Policy",
@@ -403,6 +403,10 @@
       {
         "title": "What we collect",
         "body": "When you submit the demo request form, we collect the information you provide: name, company, work email, country or region, industry, and optionally your collection volume, phone number and message. We also record your IP address, browser user agent and the time of submission to protect the form against abuse."
+      },
+      {
+        "title": "Business onboarding (KYB)",
+        "body": "If you become a business client, we send you a personal onboarding link. Through it we collect the information needed to verify your business and meet our compliance obligations: company details and documents, details of directors, beneficial owners and authorised signatories (including dates of birth, nationality, residential address, passport details and copies, proof of address and politically exposed person status), wallet ownership declarations, and your signature together with the time, IP address and browser used to sign. This information is encrypted in storage and is accessible only to authorised Quick Come staff. It is stored with our hosting and storage providers (Vercel and Upstash, Singapore region) and is used only for onboarding, compliance and our business relationship. Applications that are not approved are deleted after 1 year; for approved clients, records are kept for 5 years after the business relationship ends, unless the law requires otherwise."
       },
       {
         "title": "How we use it",

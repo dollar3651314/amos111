@@ -472,5 +472,13 @@ btnSubmit.addEventListener('click', async () => {
   applyLocks();
   form.hidden = false;
   const first = STEP_SECTION.findIndex((s) => editable.has(s));
-  show(first < 0 ? 0 : first);
+  const fromHash = Number((location.hash.match(/^#step-(\d)$/) || [])[1] ?? -1); // 切换语言后回到原来的步骤
+  show(fromHash >= 0 && fromHash < steps.length ? fromHash : first < 0 ? 0 : first);
+  // 切换语言前先保存当前步骤，避免未保存的内容丢失（AC-K11）
+  document.querySelectorAll<HTMLAnchorElement>('a[data-keep-query]').forEach((a) => a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!(await save())) return;
+    const u = new URL(a.href); u.hash = `step-${current}`;
+    location.href = u.toString();
+  }));
 })();
