@@ -35,8 +35,17 @@ export function totpCode(secret, timeMs = Date.now(), step = 30) {
 }
 /** 允许前后各 1 个时间窗（±30 秒）的误差 */
 export function verifyTotp(secret, code, timeMs = Date.now()) {
-  if (!/^[0-9]{6}$/.test(String(code))) return false;
-  return [-1, 0, 1].some((w) => totpCode(secret, timeMs + w * 30_000) === String(code));
+  return totpStep(secret, code, timeMs) >= 0;
+}
+
+/** 返回动态码对应的时间步（允许前后各一个 30 秒窗口）；不匹配返回 -1。用于防止同一个码被重复使用。 */
+export function totpStep(secret, code, timeMs = Date.now()) {
+  if (!/^[0-9]{6}$/.test(String(code))) return -1;
+  for (const w of [-1, 0, 1]) {
+    const t = timeMs + w * 30_000;
+    if (totpCode(secret, t) === String(code)) return Math.floor(t / 30_000);
+  }
+  return -1;
 }
 export const otpauthUrl = (secret, label = 'Quick Come Admin') =>
   `otpauth://totp/${encodeURIComponent(label)}?secret=${secret}&issuer=${encodeURIComponent('Quick Come')}&algorithm=SHA1&digits=6&period=30`;

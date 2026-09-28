@@ -267,7 +267,7 @@ async function openDetail(id: string) {
     for (const x of r.files) {
       const row = el('div', 'file-link');
       const left = el('span', '', DOC_NAMES[x.doc] || x.doc); if (x.person) left.appendChild(el('span', 'pill-person', pname(x.person)));
-      const link = el('a', '', `${x.name} · ${(x.size / 1048576).toFixed(1)} MB`) as HTMLAnchorElement;
+      const link = el('a', '', `${x.name} · ${x.size >= 1048576 ? (x.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(x.size / 1024)) + ' KB'}`) as HTMLAnchorElement;
       link.href = A.fileUrl(a.id, x.id);
       if (PROTO) link.addEventListener('click', (e) => { e.preventDefault(); toast('原型：正式版会通过后台函数安全下载'); });
       row.append(left, link); fc.appendChild(row);

@@ -2,7 +2,7 @@
 import QRCode from 'qrcode';
 import { json, readJson, actionOf, originOf } from './http.js';
 import { encryptJson, decryptJson, safeEqual } from './crypto.js';
-import { newTotpSecret, verifyTotp, otpauthUrl } from './totp.js';
+import { newTotpSecret, verifyTotp, totpStep, otpauthUrl } from './totp.js';
 import { hashPassword, verifyPassword, makeSession, readSession, sessionCookie, SESSION_TTL_MS, LOCK_MAX, LOCK_MS } from './auth.js';
 import { inviteEmail, needsInfoEmail, SECTION_LABELS } from './emails.js';
 import { SECTIONS } from './schema.js';
@@ -69,7 +69,9 @@ export function createAdminHandler({ repo, blobs, send, redis, keys, config, now
       const lockedUntil = Number(await redis.get('qc:admin:lock') || 0);
       if (lockedUntil > now()) return json(429, { ok: false, error: 'locked', retryAfter: Math.ceil((lockedUntil - now()) / 1000) });
       const { password, code } = await readJson(request);
-      const ok = typeof password === 'string' && verifyPassword(password, admin.pw) && verifyTotp(decryptJson(keys.enc, admin.totp), code, now());
+      // 同一个动态码只能登录一次（时间步必须大于上次成功登录时的时间步）
+      const step = typeof password === 'string' && verifyPassword(password, admin.pw) ? totpStep(decryptJson(keys.enc, admin.totp), code, now()) : -1;
+      const ok = step >= 0 && step > Number(await redis.get('qc:admin:totp-last') || 0);
       if (!ok) {
         const n = await redis.incr('qc:admin:fails');
         await redis.expire('qc:admin:fails', LOCK_MS / 1000);
@@ -77,6 +79,7 @@ export function createAdminHandler({ repo, blobs, send, redis, keys, config, now
         return json(401, { ok: false, error: 'bad_credentials', remaining: Math.max(0, LOCK_MAX - n) });
       }
       await redis.del('qc:admin:fails');
+      await redis.set('qc:admin:totp-last', String(step), { ex: 180 });
       return json(200, { ok: true }, { 'set-cookie': sessionCookie(makeSession(keys.session, admin.version, now()), SESSION_TTL_MS / 1000) });
     },
   };

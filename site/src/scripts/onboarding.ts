@@ -351,6 +351,8 @@ function sizeCanvas() {
   const r = canvas.getBoundingClientRect();
   if (!r.width) return;
   const dpr = window.devicePixelRatio || 1;
+  // 尺寸没变时保留已签的内容（来回切换步骤不会清掉签名）
+  if (canvas.width === Math.round(r.width * dpr) && canvas.height === Math.round(r.height * dpr)) return;
   canvas.width = r.width * dpr;
   canvas.height = r.height * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

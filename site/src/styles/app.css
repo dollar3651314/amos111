@@ -14,7 +14,8 @@
 .intro-card { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 24px; }
 .intro-card h1 { font-size: clamp(1.6rem, 3vw, 2.1rem); margin-bottom: 6px; }
 .meta-list { display: grid; gap: 4px; font-size: 0.9rem; color: var(--text-muted); }
-.meta-list b { color: var(--text); }
+.meta-list dt, .meta-list dd { display: inline; margin: 0; }
+.meta-list dd { color: var(--text); font-weight: 700; }
 
 /* 步骤条 */
 .stepper { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 20px; overflow-x: auto; }

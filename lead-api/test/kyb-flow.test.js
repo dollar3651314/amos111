@@ -194,6 +194,18 @@ test('登录锁定：连续错误 5 次锁定 15 分钟（AC-K8）', async () =>
   } finally { s.done(); }
 });
 
+test('同一个动态码不能重复登录（防重放）', async () => {
+  const s = setup();
+  try {
+    const secret = await s.login();
+    const code = totpCode(secret, s.getNow());
+    await s.admin('logout/', {});
+    assert.equal((await s.admin('login/', { password: 'a-long-password-123', code }))[0], 401);
+    s.setNow(s.getNow() + 30_000);
+    assert.equal((await s.admin('login/', { password: 'a-long-password-123', code: totpCode(secret, s.getNow()) }))[0], 200);
+  } finally { s.done(); }
+});
+
 test('初始化：口令错误、密码太短、重复初始化都被拒绝', async () => {
   const s = setup();
   try {
