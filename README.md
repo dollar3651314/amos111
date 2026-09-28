@@ -2,7 +2,7 @@
 本仓库由四个角色协作产出：产品经理、研发工程师、测试工程师、运维工程师。角色和协作规则见 `agents` 仓库。
 
 ## 一图看懂
-**本仓库的文档怎么读，代码目录各由谁负责。** 建议从最新的《交付说明》（v2）开始读，里面有全景图和最终效果截图。
+**本仓库的文档怎么读，代码目录各由谁负责。** 建议从最新的《交付说明》（v3）开始读，里面有全景图和最终效果截图。
 
 ```mermaid
 flowchart LR
@@ -31,12 +31,13 @@ flowchart LR
 | 部署 | `部署方案/v1-部署方案.md` |
 | 交付 | `交付记录/v1-交付说明.md` |
 | **v2：改为 Vercel 部署** | `需求文档/v2-需求说明书.md` → `00-架构方案.md`（文末的 v2 部分）→ `技术方案/v2-原型说明.md` → `需求文档/v2-任务清单.md` → `技术方案/v2-技术方案.md` → `测试报告/v2-测试报告.md` → `部署方案/v2-部署方案.md` → `交付记录/v2-交付说明.md` |
+| **v3：线上 KYB 开户** | `需求文档/v3-需求澄清问题.md` → `需求文档/v3-需求说明书.md` → `00-架构方案.md`（文末的 v3 部分）→ `技术方案/v3-原型说明.md` → `需求文档/v3-任务清单.md` → `技术方案/v3-技术方案.md` → `测试报告/v3-测试报告.md` → `部署方案/v3-部署方案.md` → `交付记录/v3-交付说明.md` |
 
 ## 代码
 | 目录 | 内容 | 常用命令 |
 |---|---|---|
-| `site/` | 官网，Astro 静态站点 | `npm ci && npm run build` |
-| `api/` | Vercel Functions（生产环境的表单接口） | 由 Vercel 自动部署 |
-| `lead-api/` | 表单处理逻辑、存储、限流、发信，以及本地服务器 | 在根目录执行：`npm ci && npm test`；本地运行：`npm run dev:local` |
+| `site/` | 官网、开户页（`/onboarding/`）和审核后台（`/admin/`），Astro 静态站点 | `npm ci && npm run build` |
+| `api/` | Vercel Functions：官网表单、开户接口、后台接口、定时清理、健康检查 | 由 Vercel 自动部署 |
+| `lead-api/` | 表单和开户（`src/kyb/`）的处理逻辑、存储、发信，以及本地服务器 | 在根目录执行：`npm ci && npm test`；本地运行：`npm run dev:local` |
 | `vercel.json` | Vercel 的构建、响应头、函数地域 | 用法见《部署方案 v2》 |
 | `e2e/` | 验收测试 | 先在根目录执行 `npm ci`、构建 `site/`，再执行 `npm ci && npx playwright test`；Lighthouse 检测用 `node lighthouse.mjs`；线上冒烟测试用 `bash smoke-prod.sh <地址>` |
