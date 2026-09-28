@@ -24,7 +24,8 @@ if [ -n "$WANT" ]; then
 fi
 
 echo "测试环境检查 $BASE"
-health=$(req "$BASE/api/health/")
+# 健康检查未通过时返回 503，curl 的重试会把几次的内容拼在一起，所以这里不重试 HTTP 错误，只重试连接失败
+health=""; for i in 1 2 3; do health=$(curl -s --max-time 15 "${H[@]}" "$BASE/api/health/"); [ -n "$health" ] && break; sleep 2; done
 echo "  健康检查的返回（只有是 / 否，不含配置值）：$health"
 check "健康检查：ok 为 true" "echo '$health' | grep -q '\"ok\":true'"
 check "健康检查：env 是 staging（不是生产）" "echo '$health' | grep -q '\"env\":\"staging\"'"
