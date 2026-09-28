@@ -161,7 +161,7 @@ export function createOnboardingHandler({ repo, blobs, send, config, now = () =>
     },
   };
 
-  return async function handle(request) {
+  const handle = async function handle(request) {
     const action = actionOf(request);
     const fn = Object.hasOwn(actions, action) ? actions[action] : null;
     if (!fn) return json(404, { ok: false, error: 'not_found' });
@@ -175,4 +175,7 @@ export function createOnboardingHandler({ repo, blobs, send, config, now = () =>
       return json(500, { ok: false, error: 'server_error' });
     }
   };
+  // 接口入口文件（api/<分组>/<动作>.js）按这个列表逐个生成，测试会检查两边一致
+  handle.actions = Object.keys(actions);
+  return handle;
 }
