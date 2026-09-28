@@ -1,0 +1,77 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import { IS_PROTOTYPE } from '../../lib/env';
+---
+<AppLayout lang="zh" title="Quick Come 审核后台" badge="审核后台">
+  <div id="admin-root" data-prototype={IS_PROTOTYPE ? '1' : undefined}>
+    <!-- 登录 -->
+    <section class="container" data-view="login" hidden>
+      <form class="card login-card form-card" data-login novalidate>
+        <h2>登录审核后台</h2>
+        <div class="f"><label for="a-pw">密码</label><input id="a-pw" type="password" autocomplete="current-password" required /></div>
+        <div class="f"><label for="a-otp">验证器动态码（6 位）</label><input id="a-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required /></div>
+        <p class="alert" data-login-err hidden></p>
+        <button class="btn btn-primary" type="submit">登录</button>
+        <p class="hint muted m0">连续输错 5 次将锁定 15 分钟。首次使用请打开 /admin/setup/ 完成初始化。</p>
+      </form>
+    </section>
+
+    <!-- 已登录 -->
+    <div class="admin-shell" data-view="app" hidden>
+      <nav class="admin-nav" aria-label="后台导航">
+        <button type="button" data-tab="apps" aria-current="page">开户申请 <span class="badge" data-count="apps"></span></button>
+        <button type="button" data-tab="leads">官网线索 <span class="badge" data-count="leads"></span></button>
+        <button type="button" data-logout>退出登录</button>
+      </nav>
+      <div class="admin-content">
+        <section data-panel="apps">
+          <div class="toolbar">
+            <h1 class="m0">开户申请</h1>
+            <button type="button" class="btn btn-primary" data-new-invite>+ 手动发送开户链接</button>
+          </div>
+          <div class="filters" role="group" aria-label="按状态筛选" data-filters></div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>编号</th><th>企业名称</th><th>状态</th><th>最近更新</th><th>保留截止</th></tr></thead>
+              <tbody data-apps-body></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section data-panel="leads" hidden>
+          <div class="toolbar"><h1 class="m0">官网线索</h1></div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>提交时间</th><th>公司</th><th>联系人</th><th>国家</th><th>行业</th><th>操作</th></tr></thead>
+              <tbody data-leads-body></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section data-panel="detail" hidden>
+          <button type="button" class="back-link" data-back-list>返回申请列表</button>
+          <div class="detail-grid">
+            <div class="stack" data-detail-sections></div>
+            <aside class="card side-card" data-side></aside>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <dialog class="card" data-dialog>
+      <form method="dialog" class="form-card" data-dialog-form>
+        <h2 data-dialog-title></h2>
+        <div data-dialog-body class="stack"></div>
+        <div class="step-actions">
+          <button class="btn btn-outline" value="cancel" type="submit">取消</button>
+          <span class="spacer"></span>
+          <button class="btn btn-primary" value="ok" type="submit" data-dialog-ok>确定</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="notice" data-toast role="status" hidden></div>
+  </div>
+</AppLayout>
+<script>
+  import '../../scripts/admin.ts';
+</script>

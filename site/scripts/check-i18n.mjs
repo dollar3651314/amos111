@@ -17,4 +17,7 @@ if (onlyEn.length || onlyZh.length) {
   if (onlyZh.length) console.error('  only in zh:', onlyZh.join(', '));
   process.exit(1);
 }
+const ob = JSON.parse(readFileSync(new URL('../src/i18n/onboarding.json', import.meta.url), 'utf8'));
+const obEn = shape(ob.en).join('|'), obZh = shape(ob.zh).join('|');
+if (obEn !== obZh) { console.error('onboarding.json: en/zh shape mismatch'); process.exit(1); }
 console.log('i18n check OK');
