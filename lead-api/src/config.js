@@ -20,6 +20,14 @@ export function loadConfig(env = process.env) {
       user: env.SMTP_USER || '',
       pass: env.SMTP_PASS || '',
     },
+    // v3：开户（KYB）
+    appSecret: env.APP_SECRET || '',
+    adminSetupToken: env.ADMIN_SETUP_TOKEN || '',
+    cronSecret: env.CRON_SECRET || '',
+    blobConfigured: Boolean(env.BLOB_READ_WRITE_TOKEN || env.BLOB_STORE_ID),
+    // 浏览器直传需要签发上传凭证，这一步只支持读写令牌（BLOB_READ_WRITE_TOKEN），不支持 OIDC
+    blobUploadToken: Boolean(env.BLOB_READ_WRITE_TOKEN),
+    localBlobDir: env.LOCAL_BLOB_DIR || '',
     mailFrom: env.MAIL_FROM || '',
     mailTo: env.MAIL_TO || '',
   };

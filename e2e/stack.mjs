@@ -15,6 +15,8 @@ export const DATA_MAIN = resolve(TMP, 'data-main');
 export const DATA_RL = resolve(TMP, 'data-ratelimit');
 export const DATA_PROTO = resolve(TMP, 'data-prototype');
 export const PROTO_DIST = resolve(TMP, 'proto-dist');
+// v3 开户（KYB）测试用的密钥：只用于本地测试
+export const KYB_ENV = { APP_SECRET: 'e2e-app-secret-e2e-app-secret-0123456789ab', ADMIN_SETUP_TOKEN: 'e2e-setup-token', CRON_SECRET: 'e2e-cron-secret' };
 const children = [];
 
 async function waitFor(url, tries = 50) {
@@ -61,7 +63,7 @@ export async function start() {
   });
   await new Promise((r) => smtp.listen(2525, '127.0.0.1', r));
 
-  startLocal(8080, DATA_MAIN, { RATE_LIMIT_MAX: '1000' });
+  startLocal(8080, DATA_MAIN, { RATE_LIMIT_MAX: '1000', ...KYB_ENV });
   startLocal(3002, DATA_RL); // 默认配置：10 分钟 5 次
 
   // AC13：用原型模式另外构建一份（与 Vercel 预览环境相同），放在 8090 端口
@@ -75,6 +77,9 @@ export async function start() {
     await new Promise((r) => smtp.close(r));
   };
 }
+
+// 解码邮件正文里的 quoted-printable（=3D、软换行）
+export const decodeQP = (raw) => Buffer.from(raw.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))), 'latin1').toString('utf8');
 
 export const readJsonl = (f) =>
   existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];

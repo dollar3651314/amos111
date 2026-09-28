@@ -10,6 +10,8 @@ import { start, TMP } from './stack.mjs';
 const CHROME = process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const TH = { performance: 85, accessibility: 90, 'best-practices': 90, seo: 90 };
 const URLS = ['/', '/contact/', '/zh/', '/zh/contact/'];
+// v3：开户页和审核后台按设计是 noindex，所以不计 SEO 分；用原型构建（8090，与正式版同一套页面结构）打开，表单才会显示
+const APP_URLS = ['http://127.0.0.1:8090/onboarding/?t=demo', 'http://127.0.0.1:8090/zh/onboarding/?t=demo', 'http://127.0.0.1:8090/admin/'];
 
 const stop = await start();
 mkdirSync(`${TMP}/lighthouse`, { recursive: true });
@@ -17,14 +19,16 @@ const chrome = await chromeLauncher.launch({ chromePath: CHROME, chromeFlags: ['
 let fail = false;
 const rows = [];
 try {
-  for (const path of URLS) {
-    const r = await lighthouse(`http://127.0.0.1:8080${path}`, {
+  for (const path of [...URLS, ...APP_URLS]) {
+    const app = path.startsWith('http');
+    const r = await lighthouse(app ? path : `http://127.0.0.1:8080${path}`, {
       port: chrome.port, output: 'html', logLevel: 'error', formFactor: 'mobile',
       skipAudits: ['is-on-https', 'redirects-http', 'canonical'],
     });
-    writeFileSync(`${TMP}/lighthouse/${path.replace(/\//g, '_') || 'home'}.html`, r.report);
+    writeFileSync(`${TMP}/lighthouse/${path.replace(/[^a-z0-9]+/gi, '_') || 'home'}.html`, r.report);
     const s = Object.fromEntries(Object.entries(r.lhr.categories).map(([k, v]) => [k, Math.round(v.score * 100)]));
-    const ok = Object.entries(TH).every(([k, min]) => s[k] >= min);
+    if (app) s.seo = 'n/a（noindex）';
+    const ok = Object.entries(TH).every(([k, min]) => (app && k === 'seo') || s[k] >= min);
     if (!ok) fail = true;
     rows.push({ path, ...s, pass: ok ? '✅' : '❌' });
     const failed = Object.values(r.lhr.audits).filter((a) => a.score !== null && a.score < 0.9 && a.scoreDisplayMode === 'binary');

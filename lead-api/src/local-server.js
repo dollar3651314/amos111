@@ -12,6 +12,13 @@ import { createFileStore } from './store.js';
 import { createMemoryLimiter } from './rateLimit.js';
 import { createMailSender } from './mailer.js';
 import { createLeadHandler } from './handler.js';
+import { createRawSender } from './mailer.js';
+import { createMemRedis } from './kyb/memredis.js';
+import { deriveKeys } from './kyb/crypto.js';
+import { createRepo } from './kyb/repo.js';
+import { createLocalBlobs } from './kyb/blobs.js';
+import { createOnboardingHandler } from './kyb/onboarding.js';
+import { createAdminHandler, createCleanup } from './kyb/admin.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SITE = resolve(process.env.SITE_DIR || join(ROOT, 'site/dist'));
@@ -37,12 +44,28 @@ function headersFor(path, host) {
 }
 
 const config = loadConfig();
+const DATA = process.env.DATA_DIR || join(ROOT, 'lead-api/data');
+const leadStore = createFileStore(DATA);
 const handle = createLeadHandler({
-  store: createFileStore(process.env.DATA_DIR || join(ROOT, 'lead-api/data')),
+  store: leadStore,
   limiter: createMemoryLimiter({ max: config.rateLimitMax, windowMs: config.rateLimitWindowMs }),
   sendMail: createMailSender(config),
   getIp: (req) => req.headers.get('x-real-ip'),
 });
+
+// v3 开户（KYB）：Redis 用本地替身（持久化到 DATA_DIR/kyb-redis.json），文件存储用本地目录。
+// 官网线索也同步写一份到 Redis 替身里，让后台的"官网线索"列表可以读到（生产环境两者本来就在同一个 Redis）。
+const kybRedis = createMemRedis({ file: join(DATA, 'kyb-redis.json') });
+const _saveLead = leadStore.saveLead;
+leadStore.saveLead = async (lead) => { await _saveLead(lead); await kybRedis.rpush('qc:leads', JSON.stringify({ type: 'lead', ...lead })); };
+const kybKeys = deriveKeys(process.env.APP_SECRET || 'local-dev-secret-local-dev-secret-0123456789');
+const kybBlobs = createLocalBlobs(process.env.LOCAL_BLOB_DIR || join(DATA, 'blobs'));
+const kybRepo = createRepo({ redis: kybRedis, keys: kybKeys });
+const kybSend = createRawSender(config);
+const kybConfig = { ...config, adminSetupToken: process.env.ADMIN_SETUP_TOKEN || '' };
+const kybOnboarding = createOnboardingHandler({ repo: kybRepo, blobs: kybBlobs, send: kybSend, config: kybConfig, getIp: (req) => req.headers.get('x-real-ip') });
+const kybAdmin = createAdminHandler({ repo: kybRepo, blobs: kybBlobs, send: kybSend, redis: kybRedis, keys: kybKeys, config: kybConfig });
+const kybCleanup = createCleanup({ repo: kybRepo, blobs: kybBlobs });
 
 async function toRequest(req) {
   const chunks = [];
@@ -74,6 +97,12 @@ http
       if (path === '/api/leads/') {
         if (req.method !== 'POST') return sendResponse(res, new Response(null, { status: 405, headers: { allow: 'POST' } }), extra);
         return sendResponse(res, await handle(await toRequest(req)), extra);
+      }
+      if (path.startsWith('/api/onboarding/')) return sendResponse(res, await kybOnboarding(await toRequest(req)), extra);
+      if (path.startsWith('/api/admin/')) return sendResponse(res, await kybAdmin(await toRequest(req)), extra);
+      if (path === '/api/cron/cleanup/') {
+        const ok = process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+        return sendResponse(res, ok ? Response.json({ ok: true, ...(await kybCleanup()) }) : Response.json({ ok: false }, { status: 401 }), extra);
       }
       if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true }), extra);
 
