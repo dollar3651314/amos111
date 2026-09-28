@@ -108,7 +108,8 @@ http
         const ok = process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
         return sendResponse(res, ok ? Response.json({ ok: true, ...(await kybCleanup()) }) : Response.json({ ok: false }, { status: 401 }), extra);
       }
-      if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true }), extra);
+      // 本地用的是文件存储和模拟 SMTP，所以固定返回 ok；env 与线上的健康检查一致（agents v0.6 C34）
+      if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true, env: config.appEnv, commit: '', local: true }), extra);
       // api/ 下没有对应文件的地址，Vercel 返回 404；这里同样返回 404，避免本地能用、线上找不到（BUG-K7）
       if (path.startsWith('/api/')) return sendResponse(res, new Response('NOT_FOUND', { status: 404 }), extra);
 

@@ -118,3 +118,16 @@ test('v4 人员：UBO 必填持股和投票权比例（0 到 100，最多 2 位�
   assert.equal(notUbo.data[0].ownershipPct, ''); assert.equal(notUbo.data[0].votingPct, '');
   assert.equal(notUbo.errors['people.0.ownershipPct'], undefined);
 });
+
+test('v5：Vercel Blob 的每次调用都显式带上读写令牌（避免落到别的存储）', async () => {
+  const { createVercelBlobs } = await import('../src/kyb/blobs.js');
+  const calls = [];
+  const fake = { head: async (p, o) => { calls.push(['head', o]); return { size: 1, contentType: 'x' }; }, get: async (p, o) => { calls.push(['get', o]); return null; },
+    put: async (p, b, o) => { calls.push(['put', o]); }, del: async (p, o) => { calls.push(['del', o]); } };
+  const b = createVercelBlobs({ token: 'vercel_blob_rw_TEST', load: async () => fake });
+  await b.head('a'); await b.read('a'); await b.put('a', Buffer.from('x'), 'text/plain'); await b.del(['a']);
+  assert.equal(calls.length, 4);
+  for (const [name, o] of calls) assert.equal(o.token, 'vercel_blob_rw_TEST', name);
+  const noTok = createVercelBlobs({ load: async () => fake }); calls.length = 0;
+  await noTok.head('a'); assert.equal(calls[0][1].token, undefined);
+});

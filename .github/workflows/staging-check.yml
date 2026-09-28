@@ -1,0 +1,32 @@
+# 测试环境（staging）的自动检查（v5 · agents v0.6 C34）
+# staging 分支每次更新后：等待 Vercel 把这个提交部署到测试环境，再执行 e2e/smoke-staging.sh。
+# 访问受保护的测试环境需要 Vercel 的 Protection Bypass 令牌：由 Amos 存进仓库的 Actions Secrets（VERCEL_BYPASS_TOKEN），
+# 不经过 AI，也不会出现在日志里（GitHub 会自动遮盖 Secrets）。
+name: staging-check
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: staging-check
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 测试环境地址：可以在仓库的 Actions Variables 里用 STAGING_URL 覆盖
+      STAGING_URL: ${{ vars.STAGING_URL || 'https://amos111-git-staging-jeffzhaifei-3827s-projects.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 检查令牌是否已配置
+        env:
+          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_BYPASS_TOKEN" ]; then echo "::error::仓库 Secrets 里没有 VERCEL_BYPASS_TOKEN（见 部署方案/v5-测试环境部署方案.md §2 第 ⑥ 步）"; exit 1; fi
+      - name: 测试环境检查
+        env:
+          VERCEL_BYPASS_TOKEN: ${{ secrets.VERCEL_BYPASS_TOKEN }}
+        run: bash e2e/smoke-staging.sh "$STAGING_URL" "${GITHUB_SHA::7}"
