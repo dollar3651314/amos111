@@ -1,0 +1,22 @@
+# v6：检查生产环境的链上监控是否在运行（AC-P17 的第二道保险）。
+# cron-job.org 每分钟调用一次 /api/tick/；超过 5 分钟没有运行，这个检查就失败，GitHub 会发邮件给仓库管理员。
+# 收付款还没在生产配置好之前（/api/tick/?health=1 返回 503 not_configured），这个检查会跳过。
+name: tick-watch
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 检查链上监控最后一次运行的时间
+        run: |
+          set -u
+          body=$(curl -sS -m 20 https://amos111.vercel.app/api/tick/?health=1 || true)
+          echo "$body"
+          if echo "$body" | grep -q '"not_configured"'; then echo "收付款还没有在生产配置，跳过"; exit 0; fi
+          echo "$body" | grep -q '"ok":true' || { echo "::error::链上监控超过 5 分钟没有运行，请检查 cron-job.org 和 Vercel 日志"; exit 1; }

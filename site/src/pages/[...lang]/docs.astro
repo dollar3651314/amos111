@@ -2,6 +2,10 @@
 // v6 开发者文档（英文为主，同时提供中文）。接口定义以这里为准；正式开发时如有调整，同步更新本页面。
 import AppLayout from '../../layouts/AppLayout.astro';
 import { langStaticPaths, type Lang } from '../../lib/i18n';
+// 示例代码放在单独的文件里，页面原样显示；端到端测试会实际运行它们（AC-P14）
+import signNode from '../../docs/sign-request.mjs?raw';
+import signPy from '../../docs/sign_request.py?raw';
+import cbVerify from '../../docs/verify-callback.mjs?raw';
 export const getStaticPaths = langStaticPaths;
 const { lang } = Astro.props as { lang: Lang };
 const en = lang === 'en';
@@ -28,50 +32,6 @@ const errors: [string, string, string][] = [
   ['409', 'idempotency_conflict', T('Same Idempotency-Key with a different body', '同一个 Idempotency-Key 用在了不同的请求内容上')], ['422', 'invalid_param', T('A parameter is missing or invalid; see error.field', '参数缺失或格式错误，见 error.field')],
   ['403', 'order_mode_disabled', T('Order mode is not enabled for your account', '你的账户没有开启订单模式')], ['422', 'insufficient_balance', T('Amount + fee exceeds available balance', '金额加手续费超过了可用余额')], ['429', 'rate_limited', T('Too many requests; retry later', '请求太频繁，请稍后重试')],
 ];
-const signNode = `import crypto from 'node:crypto';
-
-const BASE = 'https://{BASE_URL}/api/v1/';
-const KEY = process.env.QC_KEY, SECRET = process.env.QC_SECRET;
-
-async function qc(method, path, body) {
-  const ts = Math.floor(Date.now() / 1000).toString();
-  const raw = body ? JSON.stringify(body) : '';
-  const bodyHash = crypto.createHash('sha256').update(raw).digest('hex');
-  const url = new URL(path, BASE);
-  const toSign = [ts, method, url.pathname + url.search, bodyHash].join('\\n');
-  const sig = crypto.createHmac('sha256', SECRET).update(toSign).digest('hex');
-  const res = await fetch(url, {
-    method,
-    headers: {
-      'content-type': 'application/json',
-      'X-QC-Key': KEY, 'X-QC-Timestamp': ts, 'X-QC-Signature': sig,
-      ...(method === 'POST' ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
-    },
-    body: raw || undefined,
-  });
-  return res.json();
-}
-
-const order = await qc('POST', 'orders/', { merchant_order_no: 'ACME-88513', amount: '100.00', ttl_minutes: 30 });
-console.log(order.pay_url);`;
-const signPy = `import hashlib, hmac, json, time, uuid, requests
-
-BASE = "https://{BASE_URL}"
-KEY, SECRET = "qc_live_...", b"..."
-
-def qc(method, path, body=None):
-    ts = str(int(time.time()))
-    raw = json.dumps(body, separators=(",", ":")) if body else ""
-    body_hash = hashlib.sha256(raw.encode()).hexdigest()
-    to_sign = "\\n".join([ts, method, "/api/v1/" + path, body_hash])
-    sig = hmac.new(SECRET, to_sign.encode(), hashlib.sha256).hexdigest()
-    headers = {"content-type": "application/json", "X-QC-Key": KEY,
-               "X-QC-Timestamp": ts, "X-QC-Signature": sig}
-    if method == "POST":
-        headers["Idempotency-Key"] = str(uuid.uuid4())
-    return requests.request(method, BASE + "/api/v1/" + path, data=raw or None, headers=headers).json()
-
-print(qc("GET", "balance/"))`;
 const orderReq = `POST /api/v1/orders/
 {
   "customer_id": "user_88213",          // required: your own ID for this customer
@@ -126,18 +86,6 @@ X-QC-Signature: 5f1c…
     "manual": false
   }
 }`;
-const cbVerify = `import crypto from 'node:crypto';
-
-// Express example: use the raw request body, not a re-serialised object.
-app.post('/callback', express.raw({ type: 'application/json' }), (req, res) => {
-  const ts = req.get('X-QC-Timestamp');
-  const expected = crypto.createHmac('sha256', SECRET).update(ts + '\\n' + req.body).digest('hex');
-  const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.get('X-QC-Signature') || ''));
-  if (!ok || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return res.sendStatus(401);
-  const event = JSON.parse(req.body);
-  // Deduplicate by event.id: the same event may be delivered more than once.
-  res.sendStatus(200);
-});`;
 ---
 <AppLayout lang={lang} title={T('Developer docs - Quick Come', '开发者文档 - Quick Come')} badge={T('Developer docs', '开发者文档')} switchHref={`${base(other)}docs/`} switchLabel={en ? '中文' : 'EN'} switchAria={en ? '切换到中文' : 'Switch to English'}>
   <div class="container docs">

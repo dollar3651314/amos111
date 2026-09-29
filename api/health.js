@@ -16,5 +16,8 @@ export function GET() {
   const ok = storage && mail && secret && blob && blobUpload && cron;
   // commit：当前部署的提交（前 7 位，仓库是公开的，不算敏感信息），测试环境的自动检查用它确认新版本已经部署
   const commit = (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7);
-  return json(ok ? 200 : 503, { ok, env: c.appEnv, commit, storage, mail, mailMode, secret, blob, blobUpload, cron });
+  // v6 收付款：只返回是否已配置。还没配置数据库时不影响 ok（开户和官网照常运行）；配置了数据库，其余几项也必须齐全
+  const pay = { db: Boolean(c.databaseUrl), tron: c.tronNetwork, trongridKey: Boolean(c.tronApiKey), tick: Boolean(c.tickSecret) };
+  const payOk = !pay.db || (pay.trongridKey && pay.tick);
+  return json(ok && payOk ? 200 : 503, { ok: ok && payOk, env: c.appEnv, commit, storage, mail, mailMode, secret, blob, blobUpload, cron, pay });
 }

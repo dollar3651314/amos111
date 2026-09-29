@@ -1,6 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { readJsonl, decodeQP, MAILS, KYB_ENV, PAY_ENV, DATA_PAY, TMP } from '../stack.mjs';
 // @ts-ignore 与后端同一份 TOTP 实现
@@ -157,6 +158,12 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     expect(o.deposits[0].matched_by).toBe('order');
     const st = (await api(merchant, 'GET', 'customers/stats/?customer_id=buyer_2')).body;
     expect([st.total, st.count]).toEqual(['49.00', 1]);
+    // AC-P14：开发者文档里的签名示例，原样运行（只把接口地址换成本地）
+    const env = { ...process.env, QC_KEY: apiKey, QC_SECRET: apiSecret };
+    const node = execFileSync(process.execPath, [join(TMP, '../../site/src/docs/sign-request.mjs')], { env: { ...env, QC_BASE: `${B}/api/v1/` }, encoding: 'utf8' });
+    expect(node.trim()).toMatch(/\/pay\/ORD-\d{8}-[0-9A-F]{8}\/$/);
+    const py = execFileSync('python3', [join(TMP, '../../site/src/docs/sign_request.py')], { env: { ...env, QC_BASE_URL: B }, encoding: 'utf8' });
+    expect(py).toContain("'available': '142.56'"); // 94.05 + 49 × 99%
   });
 
   test('TC-P05 提币：商户提交 → 后台浏览器核对并签名 → 链上确认后完成（AC-P8、P9、P11 ②）', async () => {
