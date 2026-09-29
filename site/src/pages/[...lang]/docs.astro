@@ -10,13 +10,15 @@ const base = (l: Lang) => (l === 'en' ? '/' : '/zh/');
 const T = (e: string, z: string) => (en ? e : z);
 
 const toc = [
-  ['overview', T('Overview', '概览')], ['auth', T('Authentication', '请求签名')], ['orders', T('Orders', '订单收款')], ['addresses', T('No-order addresses', '无订单收款')],
+  ['overview', T('Overview', '概览')], ['auth', T('Authentication', '请求签名')], ['orders', T('Orders', '订单收款')], ['customers', T('Customers', '客户')], ['matching', T('Matching rules', '匹配规则')],
   ['balance', T('Balance & ledger', '余额与账本')], ['withdrawals', T('Withdrawals', '提币')], ['callbacks', T('Callbacks', '回调')], ['errors', T('Errors', '错误码')], ['sandbox', T('Sandbox', '沙箱')],
 ];
 const endpoints: [string, string, string][] = [
   ['POST', 'orders/', T('Create an order', '创建订单')], ['GET', 'orders/?order_no=…', T('Get an order (or ?merchant_order_no=…)', '查询订单（也可以用 ?merchant_order_no=…）')], ['GET', 'orders/list/?status=…&cursor=…', T('List orders', '订单列表')],
-  ['POST', 'addresses/', T('Get the address for a userid', '为 userid 申请地址')], ['GET', 'addresses/?userid=…', T('Look up a userid address', '查询 userid 的地址')],
-  ['GET', 'balance/', T('Available and frozen balance', '可用余额和冻结余额')], ['GET', 'ledger/?cursor=…', T('Ledger entries', '账本明细')], ['GET', 'deposits/?cursor=…', T('Deposits', '到账明细')],
+  ['POST', 'orders/match/', T('Manually match an unmatched deposit to an order (same customer)', '把未匹配的到账手动匹配到订单（同一个客户）')], ['POST', 'orders/unmatch/', T('Remove a deposit from an order', '解除到账和订单的匹配')],
+  ['POST', 'customers/', T('Create or update a customer; returns its permanent address', '新建或更新客户，返回客户的永久地址')], ['GET', 'customers/?customer_id=…', T('Get a customer', '查询客户')],
+  ['GET', 'customers/list/?cursor=…', T('List customers', '客户列表')], ['GET', 'customers/stats/?customer_id=…&from=…&to=…', T('Totals for a customer in a period', '客户在某个时间段的统计')],
+  ['GET', 'balance/', T('Available and frozen balance', '可用余额和冻结余额')], ['GET', 'ledger/?cursor=…', T('Ledger entries', '账本明细')], ['GET', 'deposits/?customer_id=…&matched=false&cursor=…', T('Deposits (filter by customer or unmatched)', '到账明细（可以按客户、未匹配筛选）')],
   ['POST', 'withdrawals/', T('Request a withdrawal (IP whitelist required)', '发起提币（需要 IP 白名单）')], ['GET', 'withdrawals/?withdrawal_no=…', T('Get a withdrawal', '查询提币')], ['POST', 'withdrawals/cancel/', T('Cancel a pending withdrawal', '取消待审核的提币')],
 ];
 const errors: [string, string, string][] = [
@@ -24,7 +26,7 @@ const errors: [string, string, string][] = [
   ['403', 'ip_not_allowed', T('Withdrawal request not from a whitelisted IP (or no whitelist set)', '提币请求不是来自白名单 IP（或没有设置白名单）')], ['403', 'merchant_disabled', T('Account disabled', '账户已停用')],
   ['404', 'not_found', T('No such object in your account', '你的账户里没有这条记录')], ['409', 'duplicate_merchant_order_no', T('merchant_order_no already used', '商户订单号已经存在')],
   ['409', 'idempotency_conflict', T('Same Idempotency-Key with a different body', '同一个 Idempotency-Key 用在了不同的请求内容上')], ['422', 'invalid_param', T('A parameter is missing or invalid; see error.field', '参数缺失或格式错误，见 error.field')],
-  ['422', 'insufficient_balance', T('Amount + fee exceeds available balance', '金额加手续费超过了可用余额')], ['429', 'rate_limited', T('Too many requests; retry later', '请求太频繁，请稍后重试')],
+  ['403', 'order_mode_disabled', T('Order mode is not enabled for your account', '你的账户没有开启订单模式')], ['422', 'insufficient_balance', T('Amount + fee exceeds available balance', '金额加手续费超过了可用余额')], ['429', 'rate_limited', T('Too many requests; retry later', '请求太频繁，请稍后重试')],
 ];
 const signNode = `import crypto from 'node:crypto';
 
@@ -72,28 +74,33 @@ def qc(method, path, body=None):
 print(qc("GET", "balance/"))`;
 const orderReq = `POST /api/v1/orders/
 {
+  "customer_id": "user_88213",          // required: your own ID for this customer
+  "customer_name": "Lin Trading",       // optional, used only if the customer is new
+  "customer_email": "lin@lintrading.example",
   "merchant_order_no": "ACME-88513",
-  "amount": "100.00",
-  "ttl_minutes": 30
+  "amount": "100.00"
 }`;
 const orderRes = `{
   "order_no": "ORD-20260929-0413",
   "merchant_order_no": "ACME-88513",
+  "customer_id": "user_88213",
   "amount": "100.00",
-  "address": "TMa7yK2d9Qp4XvB8sN1cF6rH3wZ5jL0eUt",
+  "matched": "0.00",
+  "address": "TMa7yK2d9Qp4XvB8sN1cF6rH3wZ5jL0eUt",   // the customer's permanent address
   "network": "TRON",
   "token": "USDT",
   "status": "pending",
   "expires_at": "2026-09-29T09:30:00Z",
   "pay_url": "https://{BASE_URL}/pay/ORD-20260929-0413/"
 }`;
-const addrReq = `POST /api/v1/addresses/
-{ "userid": "user_88213" }
+const addrReq = `POST /api/v1/customers/
+{ "customer_id": "user_88213", "name": "Lin Trading", "email": "lin@lintrading.example" }
 
-→ { "userid": "user_88213", "address": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe", "created_at": "2026-09-11T02:10:00Z" }`;
+→ { "customer_id": "user_88213", "address": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe", "created_at": "2026-09-11T02:10:00Z" }`;
 const wdReq = `POST /api/v1/withdrawals/
 {
   "kind": "payout",              // "payout" = to your customer, "cashout" = to your registered wallet
+  "customer_id": "user_88213",   // optional, for payouts
   "to": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe",
   "amount": "1000.00",
   "merchant_ref": "PAYOUT-7781"
@@ -111,11 +118,12 @@ X-QC-Signature: 5f1c…
   "data": {
     "order_no": "ORD-20260929-0409",
     "merchant_order_no": "ACME-88509",
-    "result": "completed",       // completed | partial | overpaid
+    "customer_id": "user_88213",
+    "status": "completed",       // pending | partial | completed | overpaid | expired | expired_partial
     "amount": "500.00",
-    "received": "500.00",
-    "credited": "495.00",
-    "txid": "a3c1…"
+    "matched": "500.00",
+    "deposits": [{ "txid": "a3c1…", "amount": "500.00", "matched_by": "deposit" }],   // deposit | order | manual
+    "manual": false
   }
 }`;
 const cbVerify = `import crypto from 'node:crypto';
@@ -144,7 +152,7 @@ app.post('/callback', express.raw({ type: 'application/json' }), (req, res) => {
       <ul>
         <li>{T('Network and token: USDT on TRON (TRC20) only. Amounts are decimal strings with up to 6 decimals, e.g. "100.5".', '网络和币种：只支持 TRON 上的 USDT（TRC20）。金额用字符串表示，最多 6 位小数，例如 "100.5"。')}</li>
         <li>{T('Base URL: ', '接口地址：')}<code>{'https://{BASE_URL}/api/v1/'}</code>{T(' — every path ends with "/". Requests without the trailing slash are redirected, which some HTTP clients do not follow for POST.', '，所有路径都以 "/" 结尾。不带结尾斜杠的请求会被跳转，有些 HTTP 工具在 POST 被跳转时会出错。')}</li>
-        <li>{T('Two ways to collect: ', '两种收款方式：')}<b>{T('orders', '订单收款')}</b>{T(' (one address per open order; deposit and order-matched callbacks) and ', '（每个未完成的订单一个地址；发到账通知和订单匹配通知）和')}<b>{T('no-order addresses', '无订单收款')}</b>{T(' (one permanent address per userid; deposit callbacks).', '（每个 userid 一个永久地址；只发到账通知）。')}</li>
+        <li>{T('Collect by customer: each of your customers gets one permanent address (deposit callbacks). With order mode on, create orders for a customer and deposits are matched to them automatically (order-matched callbacks).', '按客户收款：你的每个客户有一个永久地址（发到账通知）。开启订单模式后，可以给客户创建订单，系统自动把到账匹配到订单（发订单匹配通知）。')}</li>
         <li>{T('A deposit counts after 19 confirmations (about 1 minute). Callbacks are normally sent within 2 minutes of payment.', '到账达到 19 个确认（大约 1 分钟）后才算入账，一般在付款后 2 分钟内发出回调。')}</li>
         <li>{T('Every withdrawal is reviewed manually. Working hours are 8:00–23:00 (UTC+8): requests in working hours are processed within 1 hour; others at the start of the next working period.', '每一笔提币都经过人工审核。工作时间为东八区 8:00–23:00：工作时间内的申请 1 小时内处理，其余的顺延到下一个工作时间。')}</li>
       </ul>
@@ -173,14 +181,28 @@ app.post('/callback', express.raw({ type: 'application/json' }), (req, res) => {
       <pre><code>{orderReq}</code></pre>
       <pre><code>{orderRes}</code></pre>
       <ul>
-        <li>{T('ttl_minutes: 5 to 1440, default 30. merchant_order_no must be unique in your account.', 'ttl_minutes：5 到 1440，默认 30。merchant_order_no 在你的账户里不能重复。')}</li>
+        <li>{T('customer_id is required. A new customer_id creates the customer and its permanent address. merchant_order_no must be unique in your account.', 'customer_id 必填；新的 customer_id 会自动创建客户和永久地址。merchant_order_no 在你的账户里不能重复。')}</li>
+        <li>{T('The expiry time and matching thresholds are set for your account by the platform (shown in API settings). Orders require order mode; otherwise the endpoint returns 403 order_mode_disabled.', '过期时间和匹配阈值由平台为你的账户设置（在"API 设置"里可以看到）。创建订单需要开启订单模式，否则返回 403 order_mode_disabled。')}</li>
         <li>{T('Send your customer to pay_url, or show the address yourself.', '可以把 pay_url 发给付款方，也可以自己展示收款地址。')}</li>
-        <li>{T('Matching: within ±0.5% = completed, less = partial, more = overpaid. Payment after expiry: order stays expired; you get a deposit callback marked late. In every case the actual amount received (minus fee) is credited to your balance.', '匹配：相差不超过 ±0.5% 为 completed，少了为 partial，多了为 overpaid。过期后才到账：订单保持过期，只发到账通知并标记 late。不论哪种情况，实际到账金额（扣除手续费后）都会计入你的余额。')}</li>
+        <li>{T('The response can already show status completed if earlier deposits from this customer matched when the order was created. See Matching rules.', '如果创建时就匹配到了这个客户之前的到账，返回的状态可能已经是 completed，见"匹配规则"。')}</li>
       </ul>
 
-      <h2 id="addresses">{T('No-order addresses', '无订单收款')}</h2>
+      <h2 id="customers">{T('Customers', '客户')}</h2>
       <pre><code>{addrReq}</code></pre>
-      <p>{T('The same userid always returns the same address. Deposits under 1 USDT are recorded but not credited and trigger no callback.', '同一个 userid 永远返回同一个地址。低于 1 USDT 的到账会记录，但不入账，也不发回调。')}</p>
+      <ul>
+        <li>{T('Each customer has one permanent address. Every payment to it belongs to that customer, with or without an order. customer_id cannot be changed.', '每个客户一个永久地址，转到这个地址的钱都算这个客户的，不论有没有订单。customer_id 不能修改。')}</li>
+        <li>{T('Deposits under 1 USDT are recorded but not credited, not matched and trigger no callback.', '低于 1 USDT 的到账会记录，但不入账、不匹配，也不发回调。')}</li>
+        <li>{T('customers/stats/ returns received, count, fees and unmatched for a period.', 'customers/stats/ 返回某个时间段的收款合计、笔数、手续费和未匹配金额。')}</li>
+      </ul>
+
+      <h2 id="matching">{T('Matching rules', '匹配规则')}</h2>
+      <p>{T('Matching only links deposits to orders; it never changes your balance. It happens only within the same customer, in both directions:', '匹配只是把到账和订单关联起来，不会改变余额；只在同一个客户内部进行，两个方向都会触发：')}</p>
+      <ul>
+        <li>{T('Deposit first reaches an open order: the deposit goes to the open order where the running total lands between the lower (L) and upper (H) thresholds; otherwise to the oldest open order.', '订单在先、到账在后：到账匹配给"加上这笔后累计落在下限 L 和上限 H 之间"的未完成订单；都不满足时，匹配最早创建的未完成订单。')}</li>
+        <li>{T('Order created after deposits: unmatched deposits from the look-back window are added from the oldest; if the total reaches L without exceeding H they are matched, otherwise none are.', '到账在先、订单在后：从回看时间内最早的未匹配到账开始累计，达到 L 且不超过 H 时匹配，否则一笔都不匹配。')}</li>
+        <li>{T('Status: total < L = partial (keeps waiting), L ≤ total ≤ H = completed, total > H = overpaid; at expiry an order below L becomes expired (nothing received) or expired_partial.', '状态：累计 < L 为 partial（继续等待），L ≤ 累计 ≤ H 为 completed，累计 > H 为 overpaid；过期时还没达到 L 的订单变为 expired（没有收到）或 expired_partial。')}</li>
+        <li>{T('Payments after expiry stay unmatched; match them manually with orders/match/ if needed. Avoid two open orders with similar amounts for the same customer.', '过期后才到的钱记为未匹配，需要时用 orders/match/ 手动匹配。尽量不要让同一个客户同时有两个金额接近的未完成订单。')}</li>
+      </ul>
 
       <h2 id="balance">{T('Balance & ledger', '余额与账本')}</h2>
       <p>{T('GET balance/ returns { "available": "48215.40", "frozen": "1002.00" }. The ledger is append-only; each entry has type deposit, fee_in, freeze, unfreeze, withdraw or fee_out. Lists are paginated with cursor.', 'GET balance/ 返回 { "available": "48215.40", "frozen": "1002.00" }。账本只追加，每条记录的类型为 deposit、fee_in、freeze、unfreeze、withdraw、fee_out 之一。列表用 cursor 翻页。')}</p>
@@ -206,7 +228,7 @@ app.post('/callback', express.raw({ type: 'application/json' }), (req, res) => {
       </table></div>
 
       <h2 id="sandbox">{T('Sandbox', '沙箱')}</h2>
-      <p>{T('The sandbox runs on the TRON Nile testnet with test tokens that have no value. It uses a separate API Key and Secret. Ask us for sandbox access.', '沙箱使用 TRON Nile 测试网，测试币没有任何价值；使用单独的 API Key 和 Secret。需要时请联系我们开通。')}</p>
+      <p>{T('A sandbox is not available yet. During the early-access period, integrate on production with small amounts (for example 1 USDT).', '暂时不提供沙箱。试用阶段请在正式环境用小金额（例如 1 USDT）联调。')}</p>
     </article>
   </div>
 </AppLayout>

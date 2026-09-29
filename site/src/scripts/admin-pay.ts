@@ -108,6 +108,34 @@ const feeInputs = (rule: FeeRule, prefix: string, title: string) => {
   };
   return { box, read };
 };
+// v6.1 订单模式：匹配下限 L、上限 H、过期时间、回看时间（需求 §3.3），由 Amos 为每个商户填写
+const modeInputs = (mode: M.OrderMode, prefix: string) => {
+  const on = h('input', { type: 'checkbox', checked: mode.enabled }) as HTMLInputElement;
+  const low = h('input', { inputmode: 'decimal', value: String(mode.low / 10000) }) as HTMLInputElement;
+  const high = h('input', { inputmode: 'decimal', value: String(mode.high / 10000) }) as HTMLInputElement;
+  const ttl = h('input', { inputmode: 'numeric', value: String(mode.ttlMin) }) as HTMLInputElement;
+  const back = h('input', { inputmode: 'numeric', value: String(mode.lookbackH) }) as HTMLInputElement;
+  const grid = h('div', { class: 'fgrid fgrid-3' },
+    field(`${prefix}-low`, '匹配下限（%）', low, '累计达到订单金额的这个比例，就算匹配成功（1 到 100）'),
+    field(`${prefix}-high`, '匹配上限（%）', high, '累计超过这个比例，算超额付款（100 到 1000）'),
+    field(`${prefix}-ttl`, '订单过期时间（分钟）', ttl, '5 到 1440'),
+    field(`${prefix}-back`, '先到账后建单的回看时间（小时）', back, '0 到 72；0 表示不做这个方向的匹配'));
+  on.addEventListener('change', () => (grid.hidden = !on.checked)); grid.hidden = !on.checked;
+  const box = h('fieldset', { class: 'fee-set', 'data-order-mode': '' }, h('legend', {}, '订单模式'), h('label', { class: 'check-row' }, on, '开启订单模式（关闭时商户不能创建订单，到账只按客户记录）'), grid,
+    h('p', { class: 'hint muted m0' }, '修改后只影响之后创建的订单；已经创建的订单按创建时的规则计算。'));
+  const num = (i: HTMLInputElement) => (/^\d{1,4}(\.\d{1,4})?$/.test(i.value.trim()) ? Number(i.value) : NaN);
+  const read = (): M.OrderMode | null => {
+    const l = num(low), hh = num(high), tt = num(ttl), b = num(back);
+    let bad = fieldErr(low, l >= 1 && l <= 100 ? null : '请输入 1 到 100');
+    bad = fieldErr(high, hh >= 100 && hh <= 1000 ? null : '请输入 100 到 1000') || bad;
+    bad = fieldErr(ttl, Number.isInteger(tt) && tt >= 5 && tt <= 1440 ? null : '请输入 5 到 1440 的整数') || bad;
+    bad = fieldErr(back, Number.isInteger(b) && b >= 0 && b <= 72 ? null : '请输入 0 到 72 的整数') || bad;
+    if (on.checked && bad) return null;
+    return on.checked ? { enabled: true, low: Math.round(l * 10000), high: Math.round(hh * 10000), ttlMin: tt, lookbackH: b } : { ...mode, enabled: false };
+  };
+  return { box, read };
+};
+const modeText = (m: M.OrderMode) => (m.enabled ? `${m.low / 10000}%–${m.high / 10000}% · ${m.ttlMin} 分钟 · 回看 ${m.lookbackH} 小时` : '未开启');
 render.merchants = (p) => {
   const pending = M.approvedApps.filter((a) => !M.merchants.some((m) => m.name === a.company));
   const openBox = pending.length ? h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '开户已通过，待开通收付款'),
@@ -115,31 +143,68 @@ render.merchants = (p) => {
   p.replaceChildren(
     toolbar('商户'),
     openBox || h('span'),
-    table(['商户', '状态', '收款费', '付款费', '可用余额', '冻结', '地址数', 'API 提币'], M.merchants.map((m) => [
-      m.name, status(m.status === 'active' ? 'approved' : 'expired', m.status === 'active' ? '已开通' : '已停用'), describeFee(m.feeIn), describeFee(m.feeOut),
-      usd(m.available), usd(m.frozen), String(m.addresses), m.ipWhitelist.length ? '已设白名单' : h('span', { class: 'muted' }, '未开放（没有白名单）')]), '暂无商户', { onRow: (i) => editMerchant(M.merchants[i]) }),
+    table(['商户', '状态', '收款费', '付款费', '订单模式（下限–上限 · 过期 · 回看）', '可用余额', '冻结', '客户数', 'API 提币'], M.merchants.map((m) => [
+      m.name, status(m.status === 'active' ? 'approved' : 'expired', m.status === 'active' ? '已开通' : '已停用'), describeFee(m.feeIn), describeFee(m.feeOut), modeText(m.mode),
+      usd(m.available), usd(m.frozen), String(M.customers.filter((x) => x.merchantId === m.id).length), m.ipWhitelist.length ? '已设白名单' : h('span', { class: 'muted' }, '未开放（没有白名单）')]), '暂无商户', { onRow: (i) => editMerchant(M.merchants[i]) }),
   );
 };
 function openMerchant(a: (typeof M.approvedApps)[number]) {
   const fin = feeInputs({ ppm: 10000, fixed: 0, min: 0 }, 'om-in', '收款手续费');
   const fout = feeInputs({ ppm: 0, fixed: 2 * U, min: 0 }, 'om-out', '付款手续费');
-  dialog(`开通商户：${a.company}`, h('div', { class: 'stack' }, fin.box, fout.box, h('p', { class: 'hint muted m0' }, `开通后，系统给授权联系人 ${a.email} 发送设置密码的邮件（AC-P1）。`)), '开通并发送邮件', () => {
-    const i = fin.read(), o = fout.read(); if (!i || !o) return false;
-    M.merchants.push({ id: 'm' + (M.merchants.length + 1), name: a.company, status: 'active', feeIn: i, feeOut: o, available: 0, frozen: 0, addresses: 0, ipWhitelist: [], cashoutWallets: [], since: new Date().toISOString() });
+  const mode = modeInputs(M.defaultMode(), 'om-mode');
+  dialog(`开通商户：${a.company}`, h('div', { class: 'stack' }, fin.box, fout.box, mode.box, h('p', { class: 'hint muted m0' }, `开通后，系统给授权联系人 ${a.email} 发送设置密码的邮件（AC-P1）。`)), '开通并发送邮件', () => {
+    const i = fin.read(), o = fout.read(), md = mode.read(); if (!i || !o || !md) return false;
+    M.merchants.push({ id: 'm' + (M.merchants.length + 1), name: a.company, status: 'active', feeIn: i, feeOut: o, mode: md, available: 0, frozen: 0, customers: 0, ipWhitelist: [], cashoutWallets: [], since: new Date().toISOString() });
     say(`已开通 ${a.company}，并发送设置密码的邮件（原型：未实际发送）`); show('p-merchants');
   });
 }
 function editMerchant(m: M.Merchant) {
   const fin = feeInputs(m.feeIn, 'em-in', '收款手续费'), fout = feeInputs(m.feeOut, 'em-out', '付款手续费');
+  const mode = modeInputs(m.mode, 'em-mode');
   const active = h('input', { type: 'checkbox', checked: m.status === 'active' }) as HTMLInputElement;
   const preview = h('p', { class: 'hint muted m0' }, `示例：收 1,000 USDT，收款费 ${usd(calcFee(1000 * U, m.feeIn))}；付 1,000 USDT，付款费 ${usd(calcFee(1000 * U, m.feeOut))}。`);
   const wallets = m.cashoutWallets.length ? h('ul', { class: 'plain-list' }, ...m.cashoutWallets.map((w) => h('li', {}, mono(w)))) : h('p', { class: 'm0 muted' }, '暂无（来自开户表附录 B 的钱包，审核通过后登记）');
   dialog(m.name, h('div', { class: 'stack' }, h('label', { class: 'check-row' }, active, '启用（停用后商户不能登录，API 返回 403，已分配的地址照常监控入账）'),
-    fin.box, fout.box, preview, h('div', { class: 'f' }, h('span', { class: 'lbl' }, '已登记的提现钱包'), wallets)), '保存', () => {
-    const i = fin.read(), o = fout.read(); if (!i || !o) return false;
-    m.feeIn = i; m.feeOut = o; m.status = active.checked ? 'active' : 'disabled';
-    say('已保存。新的费率从下一笔开始生效，已有账本记录不变。'); show('p-merchants');
+    fin.box, fout.box, preview, mode.box, h('div', { class: 'f' }, h('span', { class: 'lbl' }, '已登记的提现钱包'), wallets)), '保存', () => {
+    const i = fin.read(), o = fout.read(), md = mode.read(); if (!i || !o || !md) return false;
+    m.feeIn = i; m.feeOut = o; m.mode = md; m.status = active.checked ? 'active' : 'disabled';
+    say('已保存。新的费率和订单模式从下一笔开始生效，已有记录不变。'); show('p-merchants');
   });
+}
+
+// ============ 客户（v6.1：跨商户搜索） ============
+let custMerchant = 'all', custQ = '';
+render.customers = (p) => {
+  const sel = h('select', { class: 'input-sm' }, h('option', { value: 'all' }, '全部商户'), ...M.merchants.map((m) => h('option', { value: m.id, selected: m.id === custMerchant }, m.name))) as HTMLSelectElement;
+  sel.addEventListener('change', () => { custMerchant = sel.value; render.customers(p); });
+  const q = h('input', { type: 'search', class: 'input-sm input-wide', placeholder: '客户标识、名称、邮箱或地址', value: custQ }) as HTMLInputElement;
+  q.addEventListener('change', () => { custQ = q.value.trim(); render.customers(p); });
+  const qs = custQ.toLowerCase();
+  const list = M.customers.filter((x) => (custMerchant === 'all' || x.merchantId === custMerchant) && (!qs || [x.id, x.name, x.email, x.address].some((v) => v.toLowerCase().includes(qs))));
+  const mName = (id: string) => M.merchants.find((m) => m.id === id)?.name || id;
+  p.replaceChildren(
+    toolbar('客户', sel, q),
+    h('p', { class: 'hint muted' }, '商户的客户由商户自己定义标识，每个客户一个永久地址。这里可以跨商户查找任意客户。'),
+    table(['商户', '客户标识', '名称', '地址', '累计收款', '笔数', '手续费', '未匹配', '最近付款'], list.map((x) => {
+      const st = M.customerStats(x.merchantId, x.id);
+      return [mName(x.merchantId), mono(x.id), x.name || '—', mono(shortAddr(x.address), x.address), usd(st.total), String(st.count), usd(st.fees), st.unmatched ? h('b', {}, usd(st.unmatched)) : '0.00', st.last ? t(st.last) : '—'];
+    }), '没有找到客户', { onRow: (i) => adminCustomer(list[i]) }),
+  );
+};
+function adminCustomer(x: M.Customer) {
+  const st = M.customerStats(x.merchantId, x.id);
+  const ds = M.deposits.filter((d) => d.merchantId === x.merchantId && d.customer === x.id);
+  const os = M.orders.filter((o) => o.merchantId === x.merchantId && o.customer === x.id);
+  const OS: Record<string, string> = { pending: '等待付款', partial: '部分付款', completed: '已完成', overpaid: '超额付款', expired: '已过期', expired_partial: '部分付款（已过期）' };
+  dialog(`${x.name || x.id}`, h('div', { class: 'stack' },
+    h('dl', { class: 'kv' }, h('dt', {}, '商户'), h('dd', {}, M.merchants.find((m) => m.id === x.merchantId)?.name || ''), h('dt', {}, '客户标识'), h('dd', {}, mono(x.id)),
+      h('dt', {}, '邮箱'), h('dd', {}, x.email || '—'), h('dt', {}, '地址'), h('dd', {}, h('span', { class: 'copy-row' }, mono(x.address), tronscan(x.address))), h('dt', {}, '创建时间'), h('dd', {}, t(x.createdAt))),
+    h('div', { class: 'stats' }, stat('累计收款', usd(st.total), 'USDT'), stat('笔数', String(st.count)), stat('手续费', usd(st.fees), 'USDT'), stat('未匹配', usd(st.unmatched), 'USDT')),
+    h('h3', { class: 'h-sm m0' }, '订单'),
+    table(['订单号', '金额', '已匹配', '状态'], os.map((o) => [mono(o.id), usd(o.amount), usd(o.matched), OS[o.status]]), '暂无'),
+    h('h3', { class: 'h-sm m0' }, '到账'),
+    table(['时间', '金额', '订单'], ds.map((d) => [t(d.time), usd(d.amount), d.orderId ? mono(d.orderId) : d.credited ? '未匹配' : '—']), '暂无'),
+  ), '关闭', null);
 }
 
 // ============ 归集 ============
@@ -174,12 +239,12 @@ render.sweep = (p) => {
     toolbar('归集', h('label', { class: 'inline-label' }, '金额 ≥', minInput), merchSel, allBtn),
     h('div', { class: 'stats' }, stat('未归集总额', usd(total), `USDT · ${M.sweepRows.length} 个地址`), stat('热钱包', usd(M.wallet.hot.usdt), `USDT · TRX ${usd(M.wallet.hot.trx)}`),
       stat('热钱包可借出能量', M.wallet.hot.energy.toLocaleString('en'), `大约够 ${energyLeft} 笔归集，24 小时内恢复`)),
-    table(['', '商户', '类型', '地址', 'USDT 余额', '最后到账', '预估手续费（示意）', ''], rows.map((x) => {
+    table(['', '商户', '客户', '地址', 'USDT 余额', '最后到账', '预估手续费（示意）', ''], rows.map((x) => {
       const cb = h('input', { type: 'checkbox', class: 'check', checked: x.sel, 'aria-label': `选择 ${x.r.address}` }) as HTMLInputElement;
       cb.addEventListener('click', (e) => e.stopPropagation());
       cb.addEventListener('change', () => { cb.checked ? sweepSel.add(x.r.id) : sweepSel.delete(x.r.id); render.sweep(p); });
       const feeCell = h('span', { class: 'status-cell' }, `≈ ${x.trx.toFixed(1)} TRX`, h('span', { class: `pill ${x.useEnergy ? 'energy' : 'burn'}` }, x.useEnergy ? '用能量' : '燃烧 TRX'), x.r.activated ? null : h('span', { class: 'pill' }, '首次，含激活'));
-      return [cb, x.r.merchant, x.r.kind === 'order' ? '订单池' : x.r.kind, mono(shortAddr(x.r.address), x.r.address), h('b', {}, usd(x.r.balance)), t(x.r.lastDeposit), feeCell,
+      return [cb, x.r.merchant, mono(x.r.customer), mono(shortAddr(x.r.address), x.r.address), h('b', {}, usd(x.r.balance)), t(x.r.lastDeposit), feeCell,
         x.r.balance < 3 * U ? h('span', { class: 'warn-text' }, '⚠️ 手续费高于余额') : ''];
     }), '暂无需要归集的地址', { onRow: (i) => { const id = rows[i].r.id; sweepSel.has(id) ? sweepSel.delete(id) : sweepSel.add(id); render.sweep(p); } }),
     h('p', { class: 'hint muted' }, '手续费按链上实时价格估算。能量不够的地址改为燃烧 TRX；从没归集过的地址要先激活（约 1.1 TRX，只需一次）。'),
@@ -194,7 +259,7 @@ function signSweep(chosen: ReturnType<typeof sweepPlan>, p: HTMLElement) {
   const allowed = [M.wallet.hot.address, M.wallet.cold.address];
   const sum = chosen.reduce((s, x) => s + x.r.balance, 0);
   const items: SignItem[] = chosen.map((x, i) => ({
-    cells: [x.r.merchant, `#${1041 + i} ${shortAddr(x.r.address)}`, `→ ${sweepTo === 'hot' ? '热钱包' : '冷钱包'}`, usd(x.r.balance)],
+    cells: [`${x.r.merchant} · ${x.r.customer}`, `#${1041 + i} ${shortAddr(x.r.address)}`, `→ ${sweepTo === 'hot' ? '热钱包' : '冷钱包'}`, usd(x.r.balance)],
     expected: { from: x.r.address, to: dest, amount: x.r.balance },
     decoded: { from: x.r.address, to: dest, amount: x.r.balance, contract: USDT_CONTRACT },
     rule: (d) => (allowed.includes(d.to) ? null : '收款地址不是热钱包或冷钱包（写在代码里的地址）'),
@@ -233,13 +298,13 @@ render.withdrawals = (p) => {
     toolbar('提币审核', h('span', { class: 'muted' }, `热钱包 ${usd(M.wallet.hot.usdt)} USDT`)),
     h('p', { class: 'hint muted' }, '每一笔提币都要人工审核（后台和 API 发起的都一样）。有新的提币申请时，系统给你发邮件，1 分钟内的多笔合并成一封。商户看到的处理时效：东八区 8:00–23:00 内 1 小时处理。'),
     filters,
-    table(['', '编号', '提交时间', '已等待', '商户', '类型', '收款地址', '金额', '手续费', '来源', '状态'], list.map((w) => {
+    table(['', '编号', '提交时间', '已等待', '商户', '类型', '客户', '收款地址', '金额', '手续费', '来源', '状态'], list.map((w) => {
       const pend = w.status === 'pending';
       const cb = h('input', { type: 'checkbox', class: 'check', checked: pend && wdSel.has(w.id), disabled: !pend, 'aria-label': `选择 ${w.id}` }) as HTMLInputElement;
       cb.addEventListener('change', () => { cb.checked ? wdSel.add(w.id) : wdSel.delete(w.id); render.withdrawals(p); });
       const st = h('span', { class: 'status-cell' }, status(...WD_CLS[w.status]));
       if (w.txid) st.append(mono(w.txid.slice(0, 8) + '…', w.txid));
-      return [cb, mono(w.id), t(w.time), pend ? minsAgo(w.time) : '—', w.merchant, w.kind === 'payout' ? '代付' : '商户提现', mono(shortAddr(w.to), w.to), h('b', {}, usd(w.amount)), usd(w.fee), w.source === 'api' ? 'API' : '后台', st];
+      return [cb, mono(w.id), t(w.time), pend ? minsAgo(w.time) : '—', w.merchant, w.kind === 'payout' ? '代付' : '商户提现', w.customer ? mono(w.customer) : '—', mono(shortAddr(w.to), w.to), h('b', {}, usd(w.amount)), usd(w.fee), w.source === 'api' ? 'API' : '后台', st];
     }), wdFilter === 'pending' ? '暂无待审核的提币' : '暂无提币'),
     short ? h('p', { class: 'alert' }, `热钱包余额不足：已选 ${usd(need)} USDT，热钱包只有 ${usd(M.wallet.hot.usdt)} USDT。请先归集，或少选几笔。`) : h('span'),
     h('div', { class: 'sumbar' }, h('span', {}, '已选 ', h('b', {}, String(chosen.length)), ' 笔 · 合计打出 ', h('b', {}, `${usd(need)} USDT`), ' · 使用热钱包能量'),
@@ -288,16 +353,14 @@ function rejectWd(chosen: M.Withdrawal[], p: HTMLElement) {
 // ============ 异常到账 ============
 const ANOM: Record<M.Anomaly['type'], [string, string]> = {
   token: ['不支持的币', '不入账。需要时由你手动处理（例如联系商户后原路退回）'],
-  late: ['过期到账', '已按实际金额入账，只发了到账通知（标记"过期到账"）'],
   below_min: ['低于 1 USDT', '不入账、不通知，只记录（防止垃圾转账）'],
-  duplicate: ['重复付款', '已入账；订单匹配通知只发第一次'],
 };
 render.anomalies = (p) => {
   p.replaceChildren(
     toolbar('异常到账'),
-    h('p', { class: 'hint muted' }, '不支持的币每天检查一次（架构方案 FB-v6-2），最多晚 24 小时出现在这里。'),
-    table(['时间', '类型', '商户', '地址', '金额', '关联', '系统的处理', ''], M.anomalies.map((a) => [
-      t(a.time), status(a.type === 'token' ? 'needs_info' : 'submitted', ANOM[a.type][0]), a.merchant, mono(shortAddr(a.address), a.address), a.amount, mono(a.ref), h('span', { class: 'hint' }, ANOM[a.type][1]),
+    h('p', { class: 'hint muted' }, '不支持的币每天检查一次（架构方案 FB-v6-2），最多晚 24 小时出现在这里。过期后才到的 USDT 不算异常：已入账，记为客户未匹配的到账。'),
+    table(['时间', '类型', '商户', '客户', '地址', '金额', '系统的处理', ''], M.anomalies.map((a) => [
+      t(a.time), status(a.type === 'token' ? 'needs_info' : 'submitted', ANOM[a.type][0]), a.merchant, mono(a.customer), mono(shortAddr(a.address), a.address), a.amount, h('span', { class: 'hint' }, ANOM[a.type][1]),
       a.handled ? h('span', { class: 'muted' }, '已处理') : h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => { a.handled = true; say('已标记为已处理'); render.anomalies(p); counts(); } }, '标记已处理')]), '暂无异常到账'),
   );
 };
@@ -310,6 +373,14 @@ render.recon = (p) => {
     table(['日期', '商户余额合计', '链上合计', '已知手续费支出', '差额', '结果'], M.recon.map((r) => [
       r.date, usd(r.balances), usd(r.chain), usd(r.fees), r.diff ? h('b', { class: 'neg' }, usd(r.diff)) : '0.00',
       r.diff ? h('span', { class: 'status-cell' }, status('needs_info', '不一致'), h('span', { class: 'hint muted' }, '已发邮件')) : status('approved', '一致')]), '暂无对账记录（第一次对账在明天）'),
+    h('h2', { class: 'h-sm' }, '按商户核对客户合计（v6.1）'),
+    h('p', { class: 'hint muted' }, '每个商户下，所有客户的收款合计必须等于这个商户的收款合计。'),
+    table(['商户', '商户收款合计', '客户收款合计', '客户数', '结果'], M.merchants.filter((m) => M.deposits.some((d) => d.merchantId === m.id)).map((m) => {
+      const ds = M.deposits.filter((d) => d.merchantId === m.id && d.credited);
+      const total = ds.reduce((s, d) => s + d.amount, 0);
+      const byCust = M.customers.filter((x) => x.merchantId === m.id).reduce((s, x) => s + M.customerStats(m.id, x.id).total, 0);
+      return [m.name, usd(total), usd(byCust), String(M.customers.filter((x) => x.merchantId === m.id).length), status(total === byCust ? 'approved' : 'needs_info', total === byCust ? '一致' : '不一致')];
+    }), '暂无'),
   );
 };
 

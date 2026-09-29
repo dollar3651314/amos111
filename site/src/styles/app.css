@@ -286,3 +286,4 @@ dialog[data-mdialog] .form-card > *, dialog[data-pdialog] .form-card > *, dialog
   .quota-row { grid-template-columns: 1fr; }
   .quota-row > span:last-child { text-align: left; }
 }
+.input-wide { max-width: 280px; min-width: 200px; }
