@@ -33,6 +33,9 @@ const rules = (vercel.headers || []).map((r) => ({
   host: r.has?.find((h) => h.type === 'host')?.value,
   headers: r.headers,
 }));
+// vercel.json 的 rewrites（只支持本项目用到的 "/pay/:id/" 写法）：地址不变，返回目标页面的内容
+const rewrites = (vercel.rewrites || []).map((r) => ({ re: new RegExp('^' + r.source.replace(/:[a-z]+/g, '[^/]+') + '$'), to: r.destination }));
+const rewrite = (path) => rewrites.find((r) => r.re.test(path))?.to || path;
 function headersFor(path, host) {
   const out = {};
   for (const r of rules) {
@@ -113,7 +116,7 @@ http
       // api/ 下没有对应文件的地址，Vercel 返回 404；这里同样返回 404，避免本地能用、线上找不到（BUG-K7）
       if (path.startsWith('/api/')) return sendResponse(res, new Response('NOT_FOUND', { status: 404 }), extra);
 
-      let file = join(SITE, path);
+      let file = join(SITE, rewrite(path));
       if (!file.startsWith(SITE)) throw new Error('bad path');
       if (existsSync(file) && statSync(file).isDirectory()) {
         if (!path.endsWith('/')) return sendResponse(res, new Response(null, { status: 308, headers: { location: path + '/' } }), extra);

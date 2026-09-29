@@ -1,0 +1,212 @@
+---
+// v6 开发者文档（英文为主，同时提供中文）。接口定义以这里为准；正式开发时如有调整，同步更新本页面。
+import AppLayout from '../../layouts/AppLayout.astro';
+import { langStaticPaths, type Lang } from '../../lib/i18n';
+export const getStaticPaths = langStaticPaths;
+const { lang } = Astro.props as { lang: Lang };
+const en = lang === 'en';
+const other: Lang = en ? 'zh' : 'en';
+const base = (l: Lang) => (l === 'en' ? '/' : '/zh/');
+const T = (e: string, z: string) => (en ? e : z);
+
+const toc = [
+  ['overview', T('Overview', '概览')], ['auth', T('Authentication', '请求签名')], ['orders', T('Orders', '订单收款')], ['addresses', T('No-order addresses', '无订单收款')],
+  ['balance', T('Balance & ledger', '余额与账本')], ['withdrawals', T('Withdrawals', '提币')], ['callbacks', T('Callbacks', '回调')], ['errors', T('Errors', '错误码')], ['sandbox', T('Sandbox', '沙箱')],
+];
+const endpoints: [string, string, string][] = [
+  ['POST', 'orders/', T('Create an order', '创建订单')], ['GET', 'orders/?order_no=…', T('Get an order (or ?merchant_order_no=…)', '查询订单（也可以用 ?merchant_order_no=…）')], ['GET', 'orders/list/?status=…&cursor=…', T('List orders', '订单列表')],
+  ['POST', 'addresses/', T('Get the address for a userid', '为 userid 申请地址')], ['GET', 'addresses/?userid=…', T('Look up a userid address', '查询 userid 的地址')],
+  ['GET', 'balance/', T('Available and frozen balance', '可用余额和冻结余额')], ['GET', 'ledger/?cursor=…', T('Ledger entries', '账本明细')], ['GET', 'deposits/?cursor=…', T('Deposits', '到账明细')],
+  ['POST', 'withdrawals/', T('Request a withdrawal (IP whitelist required)', '发起提币（需要 IP 白名单）')], ['GET', 'withdrawals/?withdrawal_no=…', T('Get a withdrawal', '查询提币')], ['POST', 'withdrawals/cancel/', T('Cancel a pending withdrawal', '取消待审核的提币')],
+];
+const errors: [string, string, string][] = [
+  ['401', 'invalid_signature', T('Missing or wrong signature', '没有签名或签名错误')], ['401', 'timestamp_expired', T('Timestamp more than 5 minutes from server time', '时间戳和服务器相差超过 5 分钟')],
+  ['403', 'ip_not_allowed', T('Withdrawal request not from a whitelisted IP (or no whitelist set)', '提币请求不是来自白名单 IP（或没有设置白名单）')], ['403', 'merchant_disabled', T('Account disabled', '账户已停用')],
+  ['404', 'not_found', T('No such object in your account', '你的账户里没有这条记录')], ['409', 'duplicate_merchant_order_no', T('merchant_order_no already used', '商户订单号已经存在')],
+  ['409', 'idempotency_conflict', T('Same Idempotency-Key with a different body', '同一个 Idempotency-Key 用在了不同的请求内容上')], ['422', 'invalid_param', T('A parameter is missing or invalid; see error.field', '参数缺失或格式错误，见 error.field')],
+  ['422', 'insufficient_balance', T('Amount + fee exceeds available balance', '金额加手续费超过了可用余额')], ['429', 'rate_limited', T('Too many requests; retry later', '请求太频繁，请稍后重试')],
+];
+const signNode = `import crypto from 'node:crypto';
+
+const BASE = 'https://{BASE_URL}/api/v1/';
+const KEY = process.env.QC_KEY, SECRET = process.env.QC_SECRET;
+
+async function qc(method, path, body) {
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const raw = body ? JSON.stringify(body) : '';
+  const bodyHash = crypto.createHash('sha256').update(raw).digest('hex');
+  const url = new URL(path, BASE);
+  const toSign = [ts, method, url.pathname + url.search, bodyHash].join('\\n');
+  const sig = crypto.createHmac('sha256', SECRET).update(toSign).digest('hex');
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'content-type': 'application/json',
+      'X-QC-Key': KEY, 'X-QC-Timestamp': ts, 'X-QC-Signature': sig,
+      ...(method === 'POST' ? { 'Idempotency-Key': crypto.randomUUID() } : {}),
+    },
+    body: raw || undefined,
+  });
+  return res.json();
+}
+
+const order = await qc('POST', 'orders/', { merchant_order_no: 'ACME-88513', amount: '100.00', ttl_minutes: 30 });
+console.log(order.pay_url);`;
+const signPy = `import hashlib, hmac, json, time, uuid, requests
+
+BASE = "https://{BASE_URL}"
+KEY, SECRET = "qc_live_...", b"..."
+
+def qc(method, path, body=None):
+    ts = str(int(time.time()))
+    raw = json.dumps(body, separators=(",", ":")) if body else ""
+    body_hash = hashlib.sha256(raw.encode()).hexdigest()
+    to_sign = "\\n".join([ts, method, "/api/v1/" + path, body_hash])
+    sig = hmac.new(SECRET, to_sign.encode(), hashlib.sha256).hexdigest()
+    headers = {"content-type": "application/json", "X-QC-Key": KEY,
+               "X-QC-Timestamp": ts, "X-QC-Signature": sig}
+    if method == "POST":
+        headers["Idempotency-Key"] = str(uuid.uuid4())
+    return requests.request(method, BASE + "/api/v1/" + path, data=raw or None, headers=headers).json()
+
+print(qc("GET", "balance/"))`;
+const orderReq = `POST /api/v1/orders/
+{
+  "merchant_order_no": "ACME-88513",
+  "amount": "100.00",
+  "ttl_minutes": 30
+}`;
+const orderRes = `{
+  "order_no": "ORD-20260929-0413",
+  "merchant_order_no": "ACME-88513",
+  "amount": "100.00",
+  "address": "TMa7yK2d9Qp4XvB8sN1cF6rH3wZ5jL0eUt",
+  "network": "TRON",
+  "token": "USDT",
+  "status": "pending",
+  "expires_at": "2026-09-29T09:30:00Z",
+  "pay_url": "https://{BASE_URL}/pay/ORD-20260929-0413/"
+}`;
+const addrReq = `POST /api/v1/addresses/
+{ "userid": "user_88213" }
+
+→ { "userid": "user_88213", "address": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe", "created_at": "2026-09-11T02:10:00Z" }`;
+const wdReq = `POST /api/v1/withdrawals/
+{
+  "kind": "payout",              // "payout" = to your customer, "cashout" = to your registered wallet
+  "to": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe",
+  "amount": "1000.00",
+  "merchant_ref": "PAYOUT-7781"
+}
+
+→ { "withdrawal_no": "WD-0032", "status": "pending", "amount": "1000.00", "fee": "2.00", "frozen": "1002.00" }`;
+const cbBody = `POST https://your-server.example/callback
+X-QC-Timestamp: 1790665800
+X-QC-Signature: 5f1c…
+
+{
+  "id": "evt_9f2a02",
+  "type": "order.matched",       // deposit | order.matched | withdrawal.updated
+  "created_at": "2026-09-29T09:10:03Z",
+  "data": {
+    "order_no": "ORD-20260929-0409",
+    "merchant_order_no": "ACME-88509",
+    "result": "completed",       // completed | partial | overpaid
+    "amount": "500.00",
+    "received": "500.00",
+    "credited": "495.00",
+    "txid": "a3c1…"
+  }
+}`;
+const cbVerify = `import crypto from 'node:crypto';
+
+// Express example: use the raw request body, not a re-serialised object.
+app.post('/callback', express.raw({ type: 'application/json' }), (req, res) => {
+  const ts = req.get('X-QC-Timestamp');
+  const expected = crypto.createHmac('sha256', SECRET).update(ts + '\\n' + req.body).digest('hex');
+  const ok = crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(req.get('X-QC-Signature') || ''));
+  if (!ok || Math.abs(Date.now() / 1000 - Number(ts)) > 300) return res.sendStatus(401);
+  const event = JSON.parse(req.body);
+  // Deduplicate by event.id: the same event may be delivered more than once.
+  res.sendStatus(200);
+});`;
+---
+<AppLayout lang={lang} title={T('Developer docs - Quick Come', '开发者文档 - Quick Come')} badge={T('Developer docs', '开发者文档')} switchHref={`${base(other)}docs/`} switchLabel={en ? '中文' : 'EN'} switchAria={en ? '切换到中文' : 'Switch to English'}>
+  <div class="container docs">
+    <nav class="docs-toc" aria-label="Contents">
+      {toc.map(([id, name]) => <a href={`#${id}`}>{name}</a>)}
+    </nav>
+    <article class="docs-body">
+      <h1>{T('Quick Come API', 'Quick Come 开放 API')}</h1>
+      <p class="muted">{T('Version 1 · Draft for the v6 prototype. Paths, fields and examples may still change before release.', '第 1 版 · v6 原型阶段的草案，正式发布前路径、字段和示例可能还会调整。')}</p>
+
+      <h2 id="overview">{T('Overview', '概览')}</h2>
+      <ul>
+        <li>{T('Network and token: USDT on TRON (TRC20) only. Amounts are decimal strings with up to 6 decimals, e.g. "100.5".', '网络和币种：只支持 TRON 上的 USDT（TRC20）。金额用字符串表示，最多 6 位小数，例如 "100.5"。')}</li>
+        <li>{T('Base URL: ', '接口地址：')}<code>{'https://{BASE_URL}/api/v1/'}</code>{T(' — every path ends with "/". Requests without the trailing slash are redirected, which some HTTP clients do not follow for POST.', '，所有路径都以 "/" 结尾。不带结尾斜杠的请求会被跳转，有些 HTTP 工具在 POST 被跳转时会出错。')}</li>
+        <li>{T('Two ways to collect: ', '两种收款方式：')}<b>{T('orders', '订单收款')}</b>{T(' (one address per open order; deposit and order-matched callbacks) and ', '（每个未完成的订单一个地址；发到账通知和订单匹配通知）和')}<b>{T('no-order addresses', '无订单收款')}</b>{T(' (one permanent address per userid; deposit callbacks).', '（每个 userid 一个永久地址；只发到账通知）。')}</li>
+        <li>{T('A deposit counts after 19 confirmations (about 1 minute). Callbacks are normally sent within 2 minutes of payment.', '到账达到 19 个确认（大约 1 分钟）后才算入账，一般在付款后 2 分钟内发出回调。')}</li>
+        <li>{T('Every withdrawal is reviewed manually. Working hours are 8:00–23:00 (UTC+8): requests in working hours are processed within 1 hour; others at the start of the next working period.', '每一笔提币都经过人工审核。工作时间为东八区 8:00–23:00：工作时间内的申请 1 小时内处理，其余的顺延到下一个工作时间。')}</li>
+      </ul>
+      <div class="table-scroll"><table class="data-table">
+        <thead><tr><th>{T('Endpoint', '接口')}</th><th>{T('Purpose', '用途')}</th></tr></thead>
+        <tbody>{endpoints.map(([m, p, d]) => <tr><td><span class={`method ${m === 'POST' ? 'post' : ''}`}>{m}</span><code>{p}</code></td><td>{d}</td></tr>)}</tbody>
+      </table></div>
+
+      <h2 id="auth">{T('Authentication', '请求签名')}</h2>
+      <p>{T('Every request carries three headers. The Secret is shown once in the dashboard (API settings); keep it on your server only.', '每个请求都要带上三个请求头。Secret 在商户后台的"API 设置"里生成，只显示一次，请只保存在你的服务器上。')}</p>
+      <div class="table-scroll"><table class="data-table">
+        <thead><tr><th>Header</th><th>{T('Value', '内容')}</th></tr></thead>
+        <tbody>
+          <tr><td><code>X-QC-Key</code></td><td>{T('Your API Key', '你的 API Key')}</td></tr>
+          <tr><td><code>X-QC-Timestamp</code></td><td>{T('Unix time in seconds; must be within 5 minutes of server time', 'Unix 时间戳（秒），和服务器时间相差不能超过 5 分钟')}</td></tr>
+          <tr><td><code>X-QC-Signature</code></td><td>{T('hex( HMAC-SHA256( Secret, timestamp + "\\n" + METHOD + "\\n" + path_and_query + "\\n" + hex(SHA-256(body)) ) ) — use an empty body for GET', 'hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 请求方法 + "\\n" + 路径和查询参数 + "\\n" + hex(SHA-256(请求体)) ) )；GET 请求的请求体为空')}</td></tr>
+          <tr><td><code>Idempotency-Key</code></td><td>{T('Recommended on POST. Retrying with the same key returns the first result instead of creating a duplicate (kept 24 hours).', 'POST 请求建议带上。用同一个 Key 重试，会返回第一次的结果，不会重复创建（保留 24 小时）。')}</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Node.js</h3>
+      <pre><code>{signNode}</code></pre>
+      <h3>Python</h3>
+      <pre><code>{signPy}</code></pre>
+
+      <h2 id="orders">{T('Orders', '订单收款')}</h2>
+      <pre><code>{orderReq}</code></pre>
+      <pre><code>{orderRes}</code></pre>
+      <ul>
+        <li>{T('ttl_minutes: 5 to 1440, default 30. merchant_order_no must be unique in your account.', 'ttl_minutes：5 到 1440，默认 30。merchant_order_no 在你的账户里不能重复。')}</li>
+        <li>{T('Send your customer to pay_url, or show the address yourself.', '可以把 pay_url 发给付款方，也可以自己展示收款地址。')}</li>
+        <li>{T('Matching: within ±0.5% = completed, less = partial, more = overpaid. Payment after expiry: order stays expired; you get a deposit callback marked late. In every case the actual amount received (minus fee) is credited to your balance.', '匹配：相差不超过 ±0.5% 为 completed，少了为 partial，多了为 overpaid。过期后才到账：订单保持过期，只发到账通知并标记 late。不论哪种情况，实际到账金额（扣除手续费后）都会计入你的余额。')}</li>
+      </ul>
+
+      <h2 id="addresses">{T('No-order addresses', '无订单收款')}</h2>
+      <pre><code>{addrReq}</code></pre>
+      <p>{T('The same userid always returns the same address. Deposits under 1 USDT are recorded but not credited and trigger no callback.', '同一个 userid 永远返回同一个地址。低于 1 USDT 的到账会记录，但不入账，也不发回调。')}</p>
+
+      <h2 id="balance">{T('Balance & ledger', '余额与账本')}</h2>
+      <p>{T('GET balance/ returns { "available": "48215.40", "frozen": "1002.00" }. The ledger is append-only; each entry has type deposit, fee_in, freeze, unfreeze, withdraw or fee_out. Lists are paginated with cursor.', 'GET balance/ 返回 { "available": "48215.40", "frozen": "1002.00" }。账本只追加，每条记录的类型为 deposit、fee_in、freeze、unfreeze、withdraw、fee_out 之一。列表用 cursor 翻页。')}</p>
+
+      <h2 id="withdrawals">{T('Withdrawals', '提币')}</h2>
+      <pre><code>{wdReq}</code></pre>
+      <ul>
+        <li>{T('API withdrawals require an IP whitelist (API settings). Without one, the endpoint returns 403 ip_not_allowed.', 'API 提币需要先在"API 设置"里设置 IP 白名单；没有白名单时返回 403 ip_not_allowed。')}</li>
+        <li>{T('Amount + fee is frozen on submit and released if the request is rejected or cancelled.', '提交时冻结"金额 + 手续费"，被驳回或取消时解冻。')}</li>
+        <li>{T('Status: pending → approved → broadcast → completed, or rejected / cancelled / failed. Each change sends a withdrawal.updated callback.', '状态：pending → approved → broadcast → completed，或 rejected / cancelled / failed。每次变化都发 withdrawal.updated 回调。')}</li>
+      </ul>
+
+      <h2 id="callbacks">{T('Callbacks', '回调')}</h2>
+      <pre><code>{cbBody}</code></pre>
+      <p>{T('Signature: hex( HMAC-SHA256( Secret, timestamp + "\\n" + raw_body ) ). Reply with any 2xx status. Otherwise we retry after 1 min, 5 min, 30 min, 2 h, 6 h, 12 h and 24 h, then stop; you can resend from the dashboard. The same event can arrive more than once: deduplicate by id.', '签名：hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 原始请求体 ) )。收到后请返回任意 2xx 状态码；否则我们在 1 分钟、5 分钟、30 分钟、2 小时、6 小时、12 小时、24 小时后重试，然后停止，你可以在商户后台手动重发。同一个事件可能收到不止一次，请按 id 去重。')}</p>
+      <pre><code>{cbVerify}</code></pre>
+
+      <h2 id="errors">{T('Errors', '错误码')}</h2>
+      <p>{T('Errors return { "error": { "code": "…", "message": "…", "field": "…" } }.', '出错时返回 { "error": { "code": "…", "message": "…", "field": "…" } }。')}</p>
+      <div class="table-scroll"><table class="data-table">
+        <thead><tr><th>HTTP</th><th>code</th><th>{T('Meaning', '含义')}</th></tr></thead>
+        <tbody>{errors.map(([s, code, d]) => <tr><td>{s}</td><td><code>{code}</code></td><td>{d}</td></tr>)}</tbody>
+      </table></div>
+
+      <h2 id="sandbox">{T('Sandbox', '沙箱')}</h2>
+      <p>{T('The sandbox runs on the TRON Nile testnet with test tokens that have no value. It uses a separate API Key and Secret. Ask us for sandbox access.', '沙箱使用 TRON Nile 测试网，测试币没有任何价值；使用单独的 API Key 和 Secret。需要时请联系我们开通。')}</p>
+    </article>
+  </div>
+</AppLayout>
