@@ -1,0 +1,93 @@
+// v6 TronGrid 客户端（TRON 官方节点服务）。只做本项目用到的几个接口；fetch 可以替换，测试时用本地替身。
+// 主网 USDT 合约 TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t；测试环境用 Nile 测试网（USDT_CONTRACT 可以覆盖）。
+import { hexToAddress, addressToHex } from './tron.js';
+
+export const NETWORKS = {
+  mainnet: { base: 'https://api.trongrid.io', usdt: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t' },
+  nile: { base: 'https://nile.trongrid.io', usdt: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf' },
+};
+
+export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, fetchImpl = fetch, timeoutMs = 8000 } = {}) {
+  const net = NETWORKS[network] || NETWORKS.mainnet;
+  const root = base || net.base;
+  const contract = usdt || net.usdt;
+  async function call(path, body) {
+    const res = await fetchImpl(root + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json' } : {}), ...(apiKey ? { 'TRON-PRO-API-KEY': apiKey } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw Object.assign(new Error(`trongrid ${res.status} ${path.split('?')[0]}`), { status: res.status });
+    return res.json();
+  }
+  return {
+    network, contract,
+    /**
+     * 已确认的 USDT 转账事件（Transfer），按时间升序。返回 { events, next }：next 是翻页用的 fingerprint。
+     * 每条事件：{ txid, logIndex, block, time, from, to, amount }
+     */
+    async transfers({ minTs, maxTs, fingerprint }) {
+      const q = new URLSearchParams({ event_name: 'Transfer', only_confirmed: 'true', order_by: 'block_timestamp,asc', limit: '200', min_block_timestamp: String(minTs), max_block_timestamp: String(maxTs) });
+      if (fingerprint) q.set('fingerprint', fingerprint);
+      const r = await call(`/v1/contracts/${contract}/events?${q}`);
+      const events = (r.data || []).map((e) => ({
+        txid: e.transaction_id, logIndex: Number(e.event_index), block: Number(e.block_number), time: Number(e.block_timestamp),
+        from: hexToAddress(e.result.from), to: hexToAddress(e.result.to), amount: Number(e.result.value),
+      }));
+      return { events, next: r.meta?.fingerprint || null };
+    },
+    /** 最新已确认（固化）的区块号和时间 */
+    async solidBlock() {
+      const r = await call('/walletsolidity/getnowblock', {});
+      return { number: r.block_header.raw_data.number, time: r.block_header.raw_data.timestamp };
+    },
+    /** 交易结果：null 表示还没确认；{ ok, fee, energy } */
+    async txInfo(txid) {
+      const r = await call('/walletsolidity/gettransactioninfobyid', { value: txid });
+      if (!r || !r.id) return null;
+      const ok = !r.receipt?.result || r.receipt.result === 'SUCCESS';
+      return { ok: ok && r.result !== 'FAILED', fee: r.fee || 0, energy: r.receipt?.energy_usage_total || 0, block: r.blockNumber };
+    },
+    /** 账户资产：TRX、各种 TRC20 余额；账户不存在（没有激活）时 activated = false */
+    async account(address) {
+      const r = await call(`/v1/accounts/${address}`);
+      const a = (r.data || [])[0];
+      if (!a) return { activated: false, trx: 0, trc20: {} };
+      const trc20 = Object.assign({}, ...(a.trc20 || []));
+      return { activated: true, trx: a.balance || 0, trc20: Object.fromEntries(Object.entries(trc20).map(([k, v]) => [k, Number(v)])) };
+    },
+    /** 账户的能量和带宽 */
+    async resources(address) {
+      const r = await call('/wallet/getaccountresource', { address, visible: true });
+      return { energyLimit: r.EnergyLimit || 0, energyUsed: r.EnergyUsed || 0 };
+    },
+    /** 链上参数（能量价格等），用来估算手续费 */
+    async chainParams() { return (await call('/wallet/getchainparameters', {})).chainParameter || []; },
+    /** 构造 USDT 转账（不含签名）：返回交易原文，由浏览器解码核对后签名 */
+    async buildUsdtTransfer({ from, to, amount, feeLimit = 50_000_000 }) {
+      const param = hexParam(to) + BigInt(amount).toString(16).padStart(64, '0');
+      const r = await call('/wallet/triggersmartcontract', { owner_address: from, contract_address: contract, function_selector: 'transfer(address,uint256)', parameter: param, fee_limit: feeLimit, call_value: 0, visible: true });
+      if (!r.result?.result) throw new Error('build_failed');
+      return r.transaction;
+    },
+    async buildTrxTransfer({ from, to, amount }) {
+      const r = await call('/wallet/createtransaction', { owner_address: from, to_address: to, amount, visible: true });
+      if (!r.txID) throw new Error('build_failed');
+      return r;
+    },
+    async buildDelegate({ from, to, amount, undelegate = false }) {
+      const r = await call(undelegate ? '/wallet/undelegateresource' : '/wallet/delegateresource', { owner_address: from, receiver_address: to, balance: amount, resource: 'ENERGY', lock: false, visible: true });
+      if (!r.txID) throw new Error('build_failed');
+      return r;
+    },
+    /** 广播已签名的交易 */
+    async broadcast(signedTx) {
+      const r = await call('/wallet/broadcasttransaction', signedTx);
+      if (!r.result) throw Object.assign(new Error(`broadcast_failed ${r.code || ''}`), { code: r.code });
+      return r.txid || signedTx.txID;
+    },
+  };
+}
+// ABI 参数：地址左补零到 32 字节（去掉 41 前缀）
+const hexParam = (addr) => addressToHex(addr).slice(2).padStart(64, '0');
