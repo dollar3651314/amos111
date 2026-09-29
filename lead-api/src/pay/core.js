@@ -228,6 +228,8 @@ export async function recordDeposit(db, { txid, logIndex, block, to, amount, tim
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) on conflict (txid, log_index) do nothing returning *`,
       [txid, logIndex, block, to, c.merchant_id, c.customer_id, amount, fee, credited ? 'credited' : 'below_min', new Date(time)]);
     if (!d) return { status: 'duplicate' };
+    // 不论是否入账，钱都在这个地址上，归集时要算进去
+    await t.query('update customers set onchain = onchain + $3 where merchant_id = $1 and customer_id = $2', [c.merchant_id, c.customer_id, amount]);
     if (!credited) {
       await t.query(`insert into anomalies (type, merchant_id, customer_id, address, amount, ref) values ('below_min', $1, $2, $3, $4, $5) on conflict do nothing`,
         [c.merchant_id, c.customer_id, to, `${amount / 1e6} USDT`, txid]);

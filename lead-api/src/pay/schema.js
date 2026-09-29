@@ -209,6 +209,11 @@ create table if not exists recon (
   created_at timestamptz not null default now()
 );
 
+-- 地址里还没归集的 USDT（按链上到账累加，归集完成后扣减；归集前会再向链上核实）
+alter table customers add column if not exists onchain bigint not null default 0;
+create index if not exists customers_onchain on customers (onchain) where onchain > 0;
+alter table sign_batches add column if not exists verified_until timestamptz;
+
 create table if not exists pay_audit (
   id bigserial primary key,
   actor text not null,

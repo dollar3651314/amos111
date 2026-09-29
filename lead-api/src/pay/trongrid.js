@@ -60,7 +60,12 @@ export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, f
     /** 账户的能量和带宽 */
     async resources(address) {
       const r = await call('/wallet/getaccountresource', { address, visible: true });
-      return { energyLimit: r.EnergyLimit || 0, energyUsed: r.EnergyUsed || 0 };
+      return { energyLimit: r.EnergyLimit || 0, energyUsed: r.EnergyUsed || 0, totalEnergyLimit: r.TotalEnergyLimit || 0, totalEnergyWeight: r.TotalEnergyWeight || 0 };
+    },
+    /** 最多还能借出多少质押的 TRX（单位 sun）来提供能量 */
+    async canDelegate(address) {
+      const r = await call('/wallet/getcandelegatedmaxsize', { owner_address: address, type: 1, visible: true });
+      return r.max_size || 0;
     },
     /** 链上参数（能量价格等），用来估算手续费 */
     async chainParams() { return (await call('/wallet/getchainparameters', {})).chainParameter || []; },
@@ -80,6 +85,12 @@ export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, f
       const r = await call(undelegate ? '/wallet/undelegateresource' : '/wallet/delegateresource', { owner_address: from, receiver_address: to, balance: amount, resource: 'ENERGY', lock: false, visible: true });
       if (!r.txID) throw new Error('build_failed');
       return r;
+    },
+    /** 广播已签名的完整交易（protobuf 十六进制）：签名的是我们自己改过过期时间的原文，所以用 hex 广播 */
+    async broadcastHex(txHex) {
+      const r = await call('/wallet/broadcasthex', { transaction: txHex });
+      if (!r.result) throw Object.assign(new Error(`broadcast_failed ${r.code || ''} ${r.message || ''}`.trim()), { code: r.code });
+      return r.txid;
     },
     /** 广播已签名的交易 */
     async broadcast(signedTx) {
