@@ -18,7 +18,9 @@ export function canonicalPath(url) {
   const rest = new URLSearchParams(u.search);
   rest.delete('p');
   const qs = rest.toString();
-  return `/api/v1/${p.replace(/^\/+/, '')}${qs ? `?${qs}` : ''}`;
+  // 所有接口路径都以 / 结尾（开发者文档）；改写后 p 里可能没有结尾的 /，这里补上
+  const path = p.replace(/^\/+/, '');
+  return `/api/v1/${path && !path.endsWith('/') ? `${path}/` : path}${qs ? `?${qs}` : ''}`;
 }
 export function signRequest(secret, ts, method, path, body) {
   const bodyHash = createHash('sha256').update(body || '').digest('hex');

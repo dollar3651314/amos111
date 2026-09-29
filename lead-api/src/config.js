@@ -33,6 +33,14 @@ export function loadConfig(rawEnv = process.env) {
     localBlobDir: env.LOCAL_BLOB_DIR || '',
     // 当前环境（agents v0.6 C34）：production / staging / preview / local
     appEnv: env.APP_ENV || env.VERCEL_ENV || 'local',
+    // v6 收付款
+    databaseUrl: env.DATABASE_URL || '',
+    localDbDir: env.LOCAL_DB_DIR || '', // 本地和自动化测试：内嵌 Postgres 的数据目录
+    tronNetwork: env.TRON_NETWORK || 'mainnet',
+    tronApiKey: env.TRONGRID_API_KEY || '',
+    usdtContract: env.USDT_CONTRACT || '',
+    tickSecret: env.TICK_SECRET || '',
+    fakeTron: env.FAKE_TRON === '1', // 本地和自动化测试：用 TronGrid 替身
     mailFrom: env.MAIL_FROM || '',
     mailTo: env.MAIL_TO || '',
   };

@@ -19,6 +19,8 @@ import { createRepo } from './kyb/repo.js';
 import { createLocalBlobs } from './kyb/blobs.js';
 import { createOnboardingHandler } from './kyb/onboarding.js';
 import { createAdminHandler, createCleanup } from './kyb/admin.js';
+import { createPayDeps } from './pay/deps.js';
+import { approvedFromKyb } from './pay/kyb-link.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const SITE = resolve(process.env.SITE_DIR || join(ROOT, 'site/dist'));
@@ -34,7 +36,8 @@ const rules = (vercel.headers || []).map((r) => ({
   headers: r.headers,
 }));
 // vercel.json 的 rewrites（只支持本项目用到的 "/pay/:id/" 写法）：地址不变，返回目标页面的内容
-const rewrites = (vercel.rewrites || []).map((r) => ({ re: new RegExp('^' + r.source.replace(/:[a-z]+/g, '[^/]+') + '$'), to: r.destination }));
+// /api/ 下的改写（/api/v1/:path*）由下面的接口路由直接处理，这里只处理页面的改写
+const rewrites = (vercel.rewrites || []).filter((r) => !r.source.startsWith('/api/')).map((r) => ({ re: new RegExp('^' + r.source.replace(/:[a-z]+/g, '[^/]+') + '$'), to: r.destination }));
 const rewrite = (path) => rewrites.find((r) => r.re.test(path))?.to || path;
 function headersFor(path, host) {
   const out = {};
@@ -69,6 +72,10 @@ const kybConfig = { ...config, adminSetupToken: process.env.ADMIN_SETUP_TOKEN ||
 const kybOnboarding = createOnboardingHandler({ repo: kybRepo, blobs: kybBlobs, send: kybSend, config: kybConfig, getIp: (req) => req.headers.get('x-real-ip') });
 const kybAdmin = createAdminHandler({ repo: kybRepo, blobs: kybBlobs, send: kybSend, redis: kybRedis, keys: kybKeys, config: kybConfig });
 const kybCleanup = createCleanup({ repo: kybRepo, blobs: kybBlobs });
+
+// v6 收付款：数据库用内嵌 Postgres（DATA_DIR/paydb），链上用 TronGrid 替身（FAKE_TRON=0 且配置了 TRONGRID_API_KEY 时才连真实网络）
+const payConfig = { ...config, appSecret: process.env.APP_SECRET || 'local-dev-secret-local-dev-secret-0123456789', localDbDir: config.localDbDir || join(DATA, 'paydb'), fakeTron: process.env.FAKE_TRON !== '0', databaseUrl: '' };
+const payPromise = createPayDeps({ config: payConfig, kyb: { redis: kybRedis, keys: kybKeys, listApproved: approvedFromKyb(kybRepo) }, send: kybSend, getIp: (req) => req.headers.get('x-real-ip'), origin: `http://127.0.0.1:${PORT}` });
 
 async function toRequest(req) {
   const chunks = [];
@@ -110,6 +117,26 @@ http
       if (path === '/api/cron/cleanup/') {
         const ok = process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
         return sendResponse(res, ok ? Response.json({ ok: true, ...(await kybCleanup()) }) : Response.json({ ok: false }, { status: 401 }), extra);
+      }
+      // v6 收付款接口（与 api/v1.js、merchant.js、pay.js、wallet.js、tick.js 相同的处理）
+      if (path.startsWith('/api/v1/') || path === '/api/v1') return sendResponse(res, await (await payPromise).v1(await toRequest(req)), extra);
+      if (path === '/api/merchant/') return sendResponse(res, await (await payPromise).merchant(await toRequest(req)), extra);
+      if (path === '/api/pay/') return sendResponse(res, await (await payPromise).pay(await toRequest(req)), extra);
+      if (path === '/api/wallet/') return sendResponse(res, await (await payPromise).wallet(await toRequest(req)), extra);
+      if (path === '/api/tick/') {
+        const ok = config.tickSecret && req.headers.authorization === `Bearer ${config.tickSecret}`;
+        return sendResponse(res, ok ? Response.json({ ok: true, ...(await (await payPromise).tick()) }) : Response.json({ ok: false }, { status: 401 }), extra);
+      }
+      // 只在本地、使用 TronGrid 替身时存在：端到端测试用它"模拟"链上发生的事
+      if (path.startsWith('/__fake/') && payConfig.fakeTron) {
+        const d = await payPromise;
+        const body = req.method === 'POST' ? JSON.parse((await (await toRequest(req)).text()) || '{}') : {};
+        if (path === '/__fake/tron/pay') return sendResponse(res, Response.json(d.tron.pay({ to: body.to, amount: Number(body.amount), time: body.time ? Number(body.time) : Date.now() })), extra);
+        if (path === '/__fake/tron/account') { d.tron.accounts.set(body.address, body.account); return sendResponse(res, Response.json({ ok: true }), extra); }
+        if (path === '/__fake/tron/confirm-all') { for (const b of d.tron.broadcasts) if (!d.tron.txs.get(b.txId)?.ok) d.tron.confirm(b.txId, body.ok !== false); return sendResponse(res, Response.json({ ok: true, n: d.tron.broadcasts.length }), extra); }
+        if (path === '/__fake/tick') return sendResponse(res, Response.json(await d.tick()), extra);
+        if (path === '/__fake/daily') return sendResponse(res, Response.json(await d.daily()), extra);
+        if (path === '/__fake/sql' && process.env.FAKE_SQL === '1') return sendResponse(res, Response.json(await d.db.query(body.sql, body.params || [])), extra);
       }
       // 本地用的是文件存储和模拟 SMTP，所以固定返回 ok；env 与线上的健康检查一致（agents v0.6 C34）
       if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true, env: config.appEnv, commit: '', local: true }), extra);

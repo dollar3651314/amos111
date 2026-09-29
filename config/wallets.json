@@ -1,0 +1,6 @@
+{
+  "_说明": "热钱包、冷钱包的地址（公开信息，不是密钥）。签名页面只允许把钱归集到这两个地址（架构方案 v6 §2.4），修改必须提交 PR。production 和 staging 由 Amos 在 P14 提供后填写；local 是本地测试用的地址，对应公开的测试私钥，只用于自动化测试。",
+  "production": { "hot": "", "cold": "" },
+  "staging": { "hot": "", "cold": "" },
+  "local": { "hot": "TCLBgkbfVkJroVBJVqBEsxtPNQEQMTQCLQ", "cold": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" }
+}
