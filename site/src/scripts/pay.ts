@@ -130,7 +130,10 @@ async function poll() {
   if (document.visibilityState === 'visible') {
     try {
       const r = await fetch(`/api/pay/?o=${encodeURIComponent(id)}`);
-      if (r.ok) { const d = await r.json(); st = { ...d, expiresAt: Date.parse(d.expiresAt) }; }
+      if (r.ok) {
+        const d = await r.json();
+        st = { id: d.order_no, merchant: d.merchant, amount: parseUsdt(d.amount) || 0, received: parseUsdt(d.matched) ?? 0, address: d.address, expiresAt: Date.parse(d.expires_at), status: d.status, confirmations: 0, low: d.low, high: d.high };
+      }
       else if (r.status === 404) st = null;
     } catch { /* 网络暂时不通时保持当前显示 */ }
     paint();

@@ -18,11 +18,16 @@ const tabs = ['overview', 'customers', 'orders', 'transactions', 'withdraw', 'ap
       <form class="card login-card form-card" data-setup novalidate>
         <h2>{c.setup.title}</h2>
         <p class="m0 muted">{c.setup.body}</p>
-        <div class="f"><label for="ms-pw">{c.setup.password}</label><input id="ms-pw" type="password" autocomplete="new-password" minlength="12" required /></div>
-        <div class="f"><label for="ms-pw2">{c.setup.password2}</label><input id="ms-pw2" type="password" autocomplete="new-password" minlength="12" required /></div>
-        <p class="m0">{c.setup.qr}</p>
-        <img data-setup-qr alt="QR" width="200" height="200" class="sig-img" />
-        <div class="f"><label for="ms-otp">{c.setup.code}</label><input id="ms-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></div>
+        <div class="stack" data-setup-step="1">
+          <div class="f"><label for="ms-pw">{c.setup.password}</label><input id="ms-pw" type="password" autocomplete="new-password" minlength="12" required /></div>
+          <div class="f"><label for="ms-pw2">{c.setup.password2}</label><input id="ms-pw2" type="password" autocomplete="new-password" minlength="12" required /></div>
+        </div>
+        <div class="stack" data-setup-step="2" hidden>
+          <p class="m0">{c.setup.qr}</p>
+          <img data-setup-qr alt="QR" width="200" height="200" class="sig-img" />
+          <p class="hint muted m0"><code data-setup-secret></code></p>
+          <div class="f"><label for="ms-otp">{c.setup.code}</label><input id="ms-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required /></div>
+        </div>
         <p class="alert" data-setup-err hidden></p>
         <button class="btn btn-primary" type="submit">{c.setup.submit}</button>
       </form>

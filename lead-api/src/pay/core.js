@@ -117,10 +117,10 @@ const toDeposit = (r) => ({ id: String(r.id), customer: r.customer_id, amount: r
 export async function orderView(q, id) {
   const [o] = await q.query('select * from orders where id = $1', [id]);
   if (!o) return null;
-  const ds = await q.query('select txid, amount, match_type, time from deposits where order_id = $1 order by time', [id]);
+  const ds = await q.query('select id, txid, amount, match_type, time from deposits where order_id = $1 order by time', [id]);
   return {
     order_no: o.id, merchant_order_no: o.merchant_order_no, customer_id: o.customer_id, amount: o.amount, matched: o.matched, status: o.status,
-    created_at: iso(o.created_at), expires_at: iso(o.expires_at), deposits: ds.map((d) => ({ txid: d.txid, amount: d.amount, matched_by: d.match_type, time: iso(d.time) })),
+    created_at: iso(o.created_at), expires_at: iso(o.expires_at), deposits: ds.map((d) => ({ id: String(d.id), txid: d.txid, amount: d.amount, matched_by: d.match_type, time: iso(d.time) })),
   };
 }
 async function orderCallback(t, merchantId, orderId, manual = false) {

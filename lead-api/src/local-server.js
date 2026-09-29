@@ -131,12 +131,12 @@ http
       if (path.startsWith('/__fake/') && payConfig.fakeTron) {
         const d = await payPromise;
         const body = req.method === 'POST' ? JSON.parse((await (await toRequest(req)).text()) || '{}') : {};
-        if (path === '/__fake/tron/pay') return sendResponse(res, Response.json(d.tron.pay({ to: body.to, amount: Number(body.amount), time: body.time ? Number(body.time) : Date.now() })), extra);
-        if (path === '/__fake/tron/account') { d.tron.accounts.set(body.address, body.account); return sendResponse(res, Response.json({ ok: true }), extra); }
-        if (path === '/__fake/tron/confirm-all') { for (const b of d.tron.broadcasts) if (!d.tron.txs.get(b.txId)?.ok) d.tron.confirm(b.txId, body.ok !== false); return sendResponse(res, Response.json({ ok: true, n: d.tron.broadcasts.length }), extra); }
-        if (path === '/__fake/tick') return sendResponse(res, Response.json(await d.tick()), extra);
-        if (path === '/__fake/daily') return sendResponse(res, Response.json(await d.daily()), extra);
-        if (path === '/__fake/sql' && process.env.FAKE_SQL === '1') return sendResponse(res, Response.json(await d.db.query(body.sql, body.params || [])), extra);
+        if (path === '/__fake/tron/pay/') return sendResponse(res, Response.json(d.tron.pay({ to: body.to, amount: Number(body.amount), time: body.time ? Number(body.time) : Date.now() })), extra);
+        if (path === '/__fake/tron/account/') { d.tron.accounts.set(body.address, body.account); return sendResponse(res, Response.json({ ok: true }), extra); }
+        if (path === '/__fake/tron/confirm-all/') { for (const b of d.tron.broadcasts) if (!d.tron.txs.get(b.txId)?.ok) d.tron.confirm(b.txId, body.ok !== false); return sendResponse(res, Response.json({ ok: true, n: d.tron.broadcasts.length }), extra); }
+        if (path === '/__fake/tick/') return sendResponse(res, Response.json(await d.tick()), extra);
+        if (path === '/__fake/daily/') return sendResponse(res, Response.json(await d.daily()), extra);
+        if (path === '/__fake/sql/' && process.env.FAKE_SQL === '1') return sendResponse(res, Response.json(await d.db.query(body.sql, body.params || [])), extra);
       }
       // 本地用的是文件存储和模拟 SMTP，所以固定返回 ok；env 与线上的健康检查一致（agents v0.6 C34）
       if (path === '/api/health/') return sendResponse(res, Response.json({ ok: true, env: config.appEnv, commit: '', local: true }), extra);

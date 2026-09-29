@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
-import { IS_PROTOTYPE } from '../../lib/env';
+import { IS_PROTOTYPE, IS_STAGING } from '../../lib/env';
+// 签名页面用哪一组热钱包、冷钱包地址（config/wallets.json）：构建时就确定，服务器改不了
+const WALLET_ENV = IS_STAGING ? 'staging' : !IS_PROTOTYPE && process.env.VERCEL_ENV === 'production' ? 'production' : 'local';
 ---
 <AppLayout lang="zh" title="Quick Come 审核后台" badge="审核后台">
-  <div id="admin-root" data-prototype={IS_PROTOTYPE ? '1' : undefined}>
+  <div id="admin-root" data-prototype={IS_PROTOTYPE ? '1' : undefined} data-wallet-env={WALLET_ENV}>
     <!-- 首次初始化 -->
     <section class="container" data-view="setup" hidden>
       <form class="card login-card form-card" data-setup novalidate>
@@ -128,4 +130,5 @@ import { IS_PROTOTYPE } from '../../lib/env';
 <script>
   import '../../scripts/admin.ts';
   import '../../scripts/admin-pay.ts';
+  import '../../scripts/admin-pay-real.ts';
 </script>

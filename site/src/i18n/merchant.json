@@ -219,7 +219,8 @@
         "signing": "Approved",
         "broadcast": "Sent",
         "completed": "Completed",
-        "failed": "Failed"
+        "failed": "Failed",
+        "approved": "Approved"
       },
       "kinds": {
         "payout": "Payout",
@@ -265,7 +266,8 @@
       "sandboxBody": "Use the separate sandbox key on the staging environment (TRON Nile testnet, test tokens only).",
       "modeTitle": "Order mode (set by the platform)",
       "modeOn": "On",
-      "modeOffShort": "Off"
+      "modeOffShort": "Off",
+      "regenCode": "Authenticator code (6 digits)"
     },
     "cb": {
       "title": "Callbacks",
@@ -281,7 +283,10 @@
       "events": {
         "deposit": "Deposit",
         "order": "Order matched",
-        "withdrawal": "Withdrawal status"
+        "withdrawal": "Withdrawal status",
+        "order.matched": "Order matched",
+        "withdrawal.updated": "Withdrawal status",
+        "test": "Test"
       },
       "results": {
         "ok": "Delivered ({code})",
@@ -371,6 +376,24 @@
         "statement": "Export statement (CSV)",
         "exported": "Prototype: the customer statement would download here."
       }
+    },
+    "errors": {
+      "locked": "Too many wrong attempts. Sign-in is locked for 15 minutes.",
+      "bad_code": "The authenticator code is wrong or already used. Wait for the next code.",
+      "insufficient_balance": "Insufficient balance: amount + fee exceeds your available balance.",
+      "duplicate_merchant_order_no": "This order number already exists.",
+      "order_mode_disabled": "Order mode is not enabled for your account.",
+      "invalid_param": "Please check the highlighted field.",
+      "invalid_setup_link": "This set-up link is invalid or has expired. Ask us to send a new one.",
+      "weak_password": "Password must be at least 12 characters.",
+      "cannot_match": "This deposit cannot be matched to this order.",
+      "not_matched": "This deposit is not matched to this order.",
+      "invalid_address": "Enter a valid TRON address.",
+      "address_not_registered": "This address is not one of your registered wallets.",
+      "duplicate_customer": "This customer already exists.",
+      "not_configured": "The service is not configured yet.",
+      "unauthorized": "Your session has ended. Please sign in again.",
+      "generic": "Something went wrong. Please try again."
     }
   },
   "zh": {
@@ -593,7 +616,8 @@
         "signing": "已批准",
         "broadcast": "已发出",
         "completed": "已完成",
-        "failed": "失败"
+        "failed": "失败",
+        "approved": "已批准"
       },
       "kinds": {
         "payout": "代付",
@@ -639,7 +663,8 @@
       "sandboxBody": "在测试环境使用单独的沙箱 Key（TRON Nile 测试网，只有测试币）。",
       "modeTitle": "订单模式（由平台设置）",
       "modeOn": "已开启",
-      "modeOffShort": "未开启"
+      "modeOffShort": "未开启",
+      "regenCode": "验证器动态码（6 位）"
     },
     "cb": {
       "title": "回调记录",
@@ -655,7 +680,10 @@
       "events": {
         "deposit": "到账通知",
         "order": "订单匹配通知",
-        "withdrawal": "提币状态"
+        "withdrawal": "提币状态",
+        "order.matched": "订单匹配通知",
+        "withdrawal.updated": "提币状态",
+        "test": "测试回调"
       },
       "results": {
         "ok": "成功（{code}）",
@@ -745,6 +773,24 @@
         "statement": "导出客户对账单（CSV）",
         "exported": "原型：正式版会在这里下载这个客户的对账单。"
       }
+    },
+    "errors": {
+      "locked": "连续输错次数过多，已锁定 15 分钟。",
+      "bad_code": "动态码不正确或已经用过，请等下一个动态码。",
+      "insufficient_balance": "余额不足：金额加手续费超过了可用余额。",
+      "duplicate_merchant_order_no": "这个商户订单号已经存在。",
+      "order_mode_disabled": "你的账户没有开启订单模式。",
+      "invalid_param": "请检查标红的内容。",
+      "invalid_setup_link": "设置链接无效或已过期，请联系我们重新发送。",
+      "weak_password": "密码至少 12 位。",
+      "cannot_match": "这笔到账不能匹配到这个订单。",
+      "not_matched": "这笔到账没有匹配到这个订单。",
+      "invalid_address": "请输入正确的 TRON 地址。",
+      "address_not_registered": "这个地址不是你已登记的钱包。",
+      "duplicate_customer": "这个客户已经存在。",
+      "not_configured": "服务还没有配置好。",
+      "unauthorized": "登录已过期，请重新登录。",
+      "generic": "操作失败，请稍后重试。"
     }
   }
 }

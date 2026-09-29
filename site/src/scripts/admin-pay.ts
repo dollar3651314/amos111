@@ -1,6 +1,6 @@
 // v6 运营后台：商户、归集、提币审核、异常到账、对账、钱包设置、系统状态。
 // - 原型模式：使用 v6-mock.ts 的模拟数据，签名只是模拟，密钥输入框的内容不会被读取或发送。
-// - 正式模式：接口在开发阶段接入（/api/wallet/）。在那之前，这些页面只显示"开发中"。
+// - 正式模式：由 admin-pay-real.ts 负责（/api/wallet/，真实的浏览器签名）。
 // 签名页面的核对规则见《架构方案 v6》§2.4：页面显示的收款地址和金额来自浏览器对交易原文的解码，不是服务器发来的文字。
 import { calcFee, describeFee, fmtUsdt, parseUsdt, shortAddr, type FeeRule } from '../lib/money';
 import * as M from './v6-mock';
@@ -10,23 +10,23 @@ const root = document.getElementById('admin-root')!;
 const PROTO = root.dataset.prototype === '1';
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!;
 const say = (m: string) => toast(root, '[data-toast]', m);
-const dialog = makeDialog(root, 'p');
+export const dialog = makeDialog(root, 'p');
 const t = (iso: string) => fmtTime(iso, 'zh');
 const usd = (n: number) => fmtUsdt(n);
 const U = 1_000_000;
 const toolbar = (title: string, ...right: (HTMLElement | null)[]) => h('div', { class: 'toolbar' }, h('h1', { class: 'm0' }, title), h('div', { class: 'tool-actions' }, ...right));
-const minsAgo = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 60 ? `${m} 分钟` : `${Math.floor(m / 60)} 小时 ${m % 60} 分钟`; };
-const tronscan = (a: string) => h('a', { href: `https://tronscan.org/#/address/${a}`, target: '_blank', rel: 'noopener noreferrer' }, 'Tronscan ↗');
+export const minsAgo = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 60 ? `${m} 分钟` : `${Math.floor(m / 60)} 小时 ${m % 60} 分钟`; };
+export const tronscan = (a: string) => h('a', { href: `https://tronscan.org/#/address/${a}`, target: '_blank', rel: 'noopener noreferrer' }, 'Tronscan ↗');
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
 const render: Record<string, (p: HTMLElement) => void> = {};
 function show(tab: string) {
   const p = $(`[data-panel="${tab}"]`);
-  if (!PROTO) { p.replaceChildren(h('div', { class: 'card' }, h('h1', { class: 'h-sm' }, '收付款功能开发中'), h('p', { class: 'm0 muted' }, '正式接口在 v6 开发阶段接入。'))); return; }
+  if (!PROTO) return; // 正式模式由 admin-pay-real.ts 渲染
   render[tab.slice(2)](p);
   counts();
 }
-root.querySelectorAll<HTMLElement>('[data-tab^="p-"]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab!)));
+if (PROTO) root.querySelectorAll<HTMLElement>('[data-tab^="p-"]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab!)));
 function counts() {
   const set = (k: string, n: number, meaning: string) => { const b = root.querySelector<HTMLElement>(`[data-pcount="${k}"]`); if (b) { b.textContent = String(n); b.title = `${meaning}：${n}`; } };
   set('merchants', M.merchants.filter((m) => m.status === 'active').length, '已开通的商户');
@@ -93,7 +93,7 @@ function signDialog(opts: { title: string; cols: string[]; items: SignItem[]; su
 }
 
 // ============ 商户 ============
-const feeInputs = (rule: FeeRule, prefix: string, title: string) => {
+export const feeInputs = (rule: FeeRule, prefix: string, title: string) => {
   const pct = h('input', { inputmode: 'decimal', value: String(rule.ppm / 10000) }) as HTMLInputElement;
   const fixed = h('input', { inputmode: 'decimal', value: fmtUsdt(rule.fixed, 0) || '0' }) as HTMLInputElement;
   const min = h('input', { inputmode: 'decimal', value: fmtUsdt(rule.min, 0) || '0' }) as HTMLInputElement;
@@ -109,7 +109,7 @@ const feeInputs = (rule: FeeRule, prefix: string, title: string) => {
   return { box, read };
 };
 // v6.1 订单模式：匹配下限 L、上限 H、过期时间、回看时间（需求 §3.3），由 Amos 为每个商户填写
-const modeInputs = (mode: M.OrderMode, prefix: string) => {
+export const modeInputs = (mode: M.OrderMode, prefix: string) => {
   const on = h('input', { type: 'checkbox', checked: mode.enabled }) as HTMLInputElement;
   const low = h('input', { inputmode: 'decimal', value: String(mode.low / 10000) }) as HTMLInputElement;
   const high = h('input', { inputmode: 'decimal', value: String(mode.high / 10000) }) as HTMLInputElement;
@@ -135,7 +135,7 @@ const modeInputs = (mode: M.OrderMode, prefix: string) => {
   };
   return { box, read };
 };
-const modeText = (m: M.OrderMode) => (m.enabled ? `${m.low / 10000}%–${m.high / 10000}% · ${m.ttlMin} 分钟 · 回看 ${m.lookbackH} 小时` : '未开启');
+export const modeText = (m: M.OrderMode) => (m.enabled ? `${m.low / 10000}%–${m.high / 10000}% · ${m.ttlMin} 分钟 · 回看 ${m.lookbackH} 小时` : '未开启');
 render.merchants = (p) => {
   const pending = M.approvedApps.filter((a) => !M.merchants.some((m) => m.name === a.company));
   const openBox = pending.length ? h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '开户已通过，待开通收付款'),
