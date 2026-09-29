@@ -55,7 +55,8 @@ export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, f
       const a = (r.data || [])[0];
       if (!a) return { activated: false, trx: 0, trc20: {} };
       const trc20 = Object.assign({}, ...(a.trc20 || []));
-      return { activated: true, trx: a.balance || 0, trc20: Object.fromEntries(Object.entries(trc20).map(([k, v]) => [k, Number(v)])) };
+      // 其他代币的余额可能超过 JS 能精确表示的范围：放不下的保留原始字符串（只用于显示），USDT 的余额一定放得下
+      return { activated: true, trx: a.balance || 0, trc20: Object.fromEntries(Object.entries(trc20).map(([k, v]) => [k, Number.isSafeInteger(Number(v)) ? Number(v) : String(v)])) };
     },
     /** 账户的能量和带宽 */
     async resources(address) {
