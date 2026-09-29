@@ -1,7 +1,7 @@
 // v6.1 双向匹配规则的单元测试（需求说明书 v6.1 §3.3，测试预审 TP6-7）
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { matchOnDeposit, matchOnCreate, manualMatch, unmatch, stateOf } from '../../site/src/lib/matching.ts';
+import { matchOnDeposit, matchOnCreate, manualMatch, unmatch, stateOf } from '../src/pay/matching.js';
 
 const U = 1_000_000;
 const NOW = Date.parse('2026-09-29T10:00:00Z');
