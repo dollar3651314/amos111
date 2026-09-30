@@ -3,7 +3,7 @@
 // - 原型模式（开发分支的预览）：模拟数据
 import copy from '../i18n/merchant.json';
 import { calcFee, describeFee, fmtUsdt, isTronAddress, parseUsdt, shortAddr } from '../lib/money';
-import { realData, protoData, units, ApiErr, type Amount, type Cust, type Dep, type OrderFull, type Wd, type Me } from './merchant-data';
+import { realData, protoData, units, ApiErr, MAX_ROWS, type List, type Amount, type Cust, type Dep, type OrderFull, type Wd, type Me } from './merchant-data';
 import * as Mock from './v6-mock';
 import { copyBtn, field, fieldErr, fmtTime, h, makeDialog, mono, qrDataUrl, stat, status, table, toast, tpl } from './ui';
 
@@ -16,6 +16,7 @@ const c = copy[lang];
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => root.querySelector<T>(s)!;
 const say = (m: string) => toast(root, '[data-mtoast]', m);
 const dialog = makeDialog(root, 'm');
+const dlgEl = root.querySelector<HTMLDialogElement>('[data-mdialog]')!;
 const t = (iso: string | null | undefined) => (iso ? fmtTime(iso, lang) : '—');
 const usd = (v: Amount | null | undefined) => fmtUsdt(units(v));
 const CUST_RE = /^[A-Za-z0-9_.@-]{1,128}$/;
@@ -35,8 +36,16 @@ async function go(tab: string) {
   root.querySelectorAll<HTMLElement>('[data-mpanel]').forEach((p) => (p.hidden = p.dataset.mpanel !== tab));
   root.querySelectorAll<HTMLElement>('[data-mtab]').forEach((b) => (b.dataset.mtab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   if (location.hash !== `#${tab}`) history.replaceState(null, '', `#${tab}`);
-  try { await render[tab]($(`[data-mpanel="${tab}"]`)); }
-  catch (e) { if ((e as ApiErr).status === 401) { showView('login'); return; } say(errText(e)); }
+  const p = $(`[data-mpanel="${tab}"]`);
+  // 走查：接口慢时页面一片空白、出错时只有底部一行提示。改成：0.3 秒还没好就显示"加载中"，出错时在页面里显示原因和"重试"
+  const switching = p.dataset.shown !== '1';
+  const slow = switching ? window.setTimeout(() => p.replaceChildren(h('p', { class: 'muted', 'data-loading': '' }, c.common.loading)), 300) : 0;
+  try { await render[tab](p); p.dataset.shown = '1'; }
+  catch (e) {
+    if ((e as ApiErr).status === 401) { showView('login'); return; }
+    if (switching) { p.replaceChildren(h('div', { class: 'alert', 'data-load-error': '' }, errText(e), ' ', h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => go(tab) }, c.common.retry))); }
+    else say(errText(e));
+  } finally { clearTimeout(slow); }
   updateCounts();
 }
 const refresh = () => go(current);
@@ -110,15 +119,19 @@ function depResult(d: Dep): HTMLElement {
   return status('approved', c.dep.result.credited);
 }
 const depOrder = (d: Dep) => (d.result !== 'credited' || d.confirmations ? '—' : d.order_no ? mono(d.order_no) : me.order_mode.enabled ? status('in_progress', c.dep.unmatched) : '—');
-function depositTable(rows: Dep[], full = false): HTMLElement {
+/** 表格里的一格：主要内容 + 下面一行小字（走查：列太多时在 1280 宽的屏幕上放不下，相关的两列合成一格） */
+const sub = (main: string | HTMLElement, note: string | HTMLElement | null) => h('span', { class: 'cell-2' }, main, note ? h('span', { class: 'hint muted' }, note) : null);
+/** 长列表先显示 50 条，"显示更多"再往下显示；没有取完时提示导出 */
+const pg = (list: List<unknown>) => ({ size: 50, more: (n: number) => tpl(c.common.more, { n }), note: list.truncated ? tpl(c.common.truncated, { n: MAX_ROWS }) : undefined });
+function depositTable(rows: List<Dep>, full = false): HTMLElement {
   const cc = c.dep.cols;
-  const cols = full ? [cc.time, cc.customer, cc.address, cc.txid, cc.amount, cc.fee, cc.credited, cc.match, cc.status] : [cc.time, cc.customer, cc.amount, cc.credited, cc.match, cc.status];
+  const cols = full ? [cc.time, cc.customer, `${cc.address} · ${cc.txid}`, cc.amount, `${cc.credited} · ${cc.fee}`, cc.match, cc.status] : [cc.time, cc.customer, cc.amount, cc.credited, cc.match, cc.status];
   return table(cols, rows.map((d) => {
     const credited = d.result === 'credited' && !d.confirmations ? usd(d.credited) : '—';
     return full
-      ? [t(d.time), custLink(d.customer_id), mono(shortAddr(d.address), d.address), mono(d.txid.slice(0, 10) + '…', d.txid), usd(d.amount), units(d.fee) ? usd(d.fee) : '—', credited, depOrder(d), depResult(d)]
+      ? [t(d.time), custLink(d.customer_id), sub(mono(shortAddr(d.address), d.address), mono(d.txid.slice(0, 10) + '…', d.txid)), usd(d.amount), sub(credited, units(d.fee) ? `${cc.fee} ${usd(d.fee)}` : null), depOrder(d), depResult(d)]
       : [t(d.time), custLink(d.customer_id), usd(d.amount), credited, depOrder(d), depResult(d)];
-  }), c.common.none);
+  }), c.common.none, full ? { page: pg(rows) } : {});
 }
 
 // ---------- 客户 ----------
@@ -130,9 +143,9 @@ render.customers = async (p) => {
   const drawList = async () => {
     const list = await D.customers(custQuery.trim());
     const k = cc.cols;
-    listBox.replaceChildren(table([k.id, k.name, k.email, k.address, k.total, k.count, k.fees, k.last, k.unmatched], list.map((x) => [
-      mono(x.customer_id), x.name || '—', x.email || '—', mono(shortAddr(x.address), x.address), usd(x.total), String(x.count), usd(x.fees), t(x.last_payment_at), units(x.unmatched) ? h('b', {}, usd(x.unmatched)) : '0.00',
-    ]), c.common.none, { onRow: (i) => customerDetail(list[i].customer_id), rowAttrs: (i) => ({ 'data-customer': list[i].customer_id }) }));
+    listBox.replaceChildren(table([k.id, `${k.name} · ${k.email}`, k.address, `${k.total}（${k.count}）`, k.fees, k.last, k.unmatched], list.map((x) => [
+      mono(x.customer_id), sub(x.name || '—', x.email || null), mono(shortAddr(x.address), x.address), sub(usd(x.total), `${k.count} ${x.count}`), usd(x.fees), t(x.last_payment_at), units(x.unmatched) ? h('b', {}, usd(x.unmatched)) : '0.00',
+    ]), c.common.none, { onRow: (i) => customerDetail(list[i].customer_id), rowAttrs: (i) => ({ 'data-customer': list[i].customer_id }), page: pg(list) }));
   };
   let timer = 0;
   search.addEventListener('input', () => { custQuery = search.value; clearTimeout(timer); timer = window.setTimeout(drawList, 250); });
@@ -212,9 +225,9 @@ render.orders = async (p) => {
     toolbar(c.orders.title, cust, h('button', { type: 'button', class: 'btn btn-primary', onclick: createOrder }, c.orders.new)),
     h('p', { class: 'note-box', 'data-order-settings': '' }, settingsNote()),
     filters,
-    table([oc.id, oc.merchantNo, oc.customer, oc.amount, oc.matched, oc.status, oc.created, oc.expires],
-      list.map((o) => [mono(o.order_no), o.merchant_order_no, custLink(o.customer_id), usd(o.amount), units(o.matched) ? usd(o.matched) : '—', orderBadge(o.status), t(o.created_at), t(o.expires_at)]),
-      c.common.none, { onRow: (i) => orderDetail(list[i].order_no), rowAttrs: (i) => ({ 'data-order': list[i].order_no }) }),
+    table([oc.id, oc.merchantNo, oc.customer, oc.amount, oc.matched, oc.status, `${oc.created} · ${oc.expires}`],
+      list.map((o) => [mono(o.order_no), o.merchant_order_no, custLink(o.customer_id), usd(o.amount), units(o.matched) ? usd(o.matched) : '—', orderBadge(o.status), sub(t(o.created_at), t(o.expires_at))]),
+      c.common.none, { onRow: (i) => orderDetail(list[i].order_no), rowAttrs: (i) => ({ 'data-order': list[i].order_no }), page: pg(all) }),
   );
 };
 async function orderDetail(id: string) {
@@ -246,7 +259,8 @@ async function orderDetail(id: string) {
     );
   };
   try { await draw(); } catch (e) { say(errText(e)); return; }
-  dialog(tpl(cd.title, { id }), box, c.common.confirm, () => { refresh(); });
+  dialog(tpl(cd.title, { id }), box, c.common.close, null, false, true);
+  dlgEl.addEventListener('close', refresh, { once: true });
 }
 // ---------- 客户选择框（创建订单、代付共用） ----------
 // 按客户编号、名称、邮箱模糊搜索（服务端解密邮箱后比对）；选中已有客户时回调里带着客户资料，输入新的编号时 cust 为 null。
@@ -277,7 +291,7 @@ function customerPicker(id: string, onChange: (p: Picked) => void) {
   const search = async () => {
     const q = input.value.trim(), my = ++seq;
     let r: Cust[] = [];
-    try { r = (await D.customers(q)).slice(0, 8); } catch { /* 搜索失败时只显示"新建" */ }
+    try { r = (await D.customers(q, true)).slice(0, 8); } catch { /* 搜索失败时只显示"新建" */ }
     if (my !== seq || document.activeElement !== input) return;
     items = r; active = -1; draw(q);
     const exact = r.find((x) => x.customer_id === q);
@@ -360,7 +374,7 @@ render.transactions = async (p) => {
     const rows = await D.ledger(txCust);
     content = h('div', { class: 'stack' }, h('p', { class: 'hint muted m0' }, ct.ledgerNote),
       table([lc.time, lc.type, c.dep.cols.customer, lc.amount, lc.balance, lc.ref], rows.map((l) => [t(l.created_at), ct.ledgerTypes[l.type], l.customer_id ? mono(l.customer_id) : '—',
-        h('span', { class: units(l.amount) < 0 ? 'neg' : 'pos' }, (units(l.amount) > 0 ? '+' : '') + usd(l.amount)), usd(l.available_after), mono(l.ref)]), c.common.none));
+        h('span', { class: units(l.amount) < 0 ? 'neg' : 'pos' }, (units(l.amount) > 0 ? '+' : '') + usd(l.amount)), usd(l.available_after), mono(l.ref)]), c.common.none, { page: pg(rows) }));
   }
   const exp = D.exportUrl(txTab);
   p.replaceChildren(toolbar(ct.title, cust, txTab === 'deposits' && me.order_mode.enabled ? h('label', { class: 'inline-label' }, um, c.dep.filterUnmatched) : null,
@@ -440,7 +454,7 @@ render.withdraw = async (p) => {
       if (w.status === 'pending') st.append(h('button', { type: 'button', class: 'link-btn', onclick: () => cancelWd(w, p) }, cw.cancel));
       if (w.reason) st.append(h('span', { class: 'hint muted' }, `${cw.reason}：${w.reason}`));
       return [t(w.created_at), mono(w.withdrawal_no), cw.kinds[w.kind], w.customer_id ? mono(w.customer_id) : '—', mono(shortAddr(w.to), w.to), usd(w.amount), usd(w.fee), cw.sources[w.source], st];
-    }), c.common.none),
+    }), c.common.none, { page: pg(list) }),
   );
 };
 function cancelWd(w: Wd, p: HTMLElement) {
@@ -505,11 +519,11 @@ render.callbacks = async (p) => {
     toolbar(cc.title),
     table([cc.cols.time, cc.cols.id, cc.cols.event, cc.cols.ref, cc.cols.attempts, cc.cols.result, cc.cols.actions], rows.map((x) => {
       const kind = x.status === 'ok' ? 'ok' : x.status === 'failed' ? 'failed' : 'retrying';
-      const res = h('span', { class: 'status-cell' }, status(kind === 'ok' ? 'approved' : kind === 'failed' ? 'needs_info' : 'submitted', x.status === 'pending' && !x.attempts ? '…' : tpl(cc.results[kind], { code: x.last_code ?? '—' })));
+      const res = h('span', { class: 'status-cell' }, status(kind === 'ok' ? 'approved' : kind === 'failed' ? 'needs_info' : 'submitted', x.status === 'pending' && !x.attempts ? cc.results.queued : tpl(cc.results[kind], { code: x.last_code ?? cc.results.noResponse })));
       if (x.next_at && x.attempts) res.append(h('span', { class: 'hint muted' }, tpl(cc.next, { t: t(x.next_at) })));
       return [t(x.created_at), mono(x.id), (cc.events as Record<string, string>)[x.event] || x.event, mono(x.ref || '—'), String(x.attempts), res,
         h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: async () => { try { await D.resend(x.id); say(tpl(cc.resent, { id: x.id })); await render.callbacks(p); } catch (e) { say(errText(e)); } } }, cc.resend)];
-    }), c.common.none),
+    }), c.common.none, { page: pg(rows) }),
   );
 };
 

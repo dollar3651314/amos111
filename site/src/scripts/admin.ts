@@ -202,10 +202,34 @@ $('[data-login]').addEventListener('submit', async (e) => {
 });
 $('[data-logout]').addEventListener('click', async () => { await A.logout().catch(() => {}); showView('login'); });
 // v6 收付款的标签（p- 开头）由 admin-pay.ts 渲染，这里只切换面板
-root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => { const p = b.dataset.tab!; if (p.startsWith('p-')) { showPanel(p); return; } if (p === 'leads') await renderLeads(); else await renderList(); showPanel(p); }));
+// 走查：原来先等接口返回再切换页面——接口慢时点了没反应，等数据回来又把人从别的页面拉回来；接口出错时一直停在原页面。
+// 改成：点了马上切换；0.3 秒还没好显示"加载中"；出错时在页面顶部显示原因和"重试"
+const panelNote = (p: string) => {
+  const panel = $(`[data-panel="${p}"]`);
+  let n = panel.querySelector<HTMLElement>(':scope > [data-panel-note]');
+  if (!n) { n = el('div', '', ''); n.dataset.panelNote = ''; panel.prepend(n); }
+  return n;
+};
+async function openListTab(p: string) {
+  showPanel(p);
+  const note = panelNote(p);
+  const slow = window.setTimeout(() => { note.className = 'muted'; note.textContent = '加载中……'; note.hidden = false; }, 300);
+  try { if (p === 'leads') await renderLeads(); else await renderList(); note.hidden = true; }
+  catch {
+    const retry = el('button', 'btn btn-outline btn-sm', '重试') as HTMLButtonElement;
+    retry.type = 'button'; retry.addEventListener('click', () => openListTab(p));
+    note.className = 'alert'; note.replaceChildren('读取失败，请稍后重试。 ', retry); note.hidden = false;
+  } finally { clearTimeout(slow); }
+}
+root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', () => { const p = b.dataset.tab!; if (p.startsWith('p-')) showPanel(p); else openListTab(p); }));
 // 登录后默认打开"概览"（收付款没有配置时，概览页会自动退回"开户申请"）
 // 先切到概览再显示后台：否则数据加载期间用户点了别的页面，加载完又会被切回概览
-async function enterApp() { await Promise.all([renderList(), renderLeads()]); showPanel('apps'); $<HTMLElement>('[data-tab="p-overview"]').click(); showView('app'); }
+// 走查：开户申请或官网线索读取失败时，原来整个后台都进不去（收付款的页面也打不开）。改成读取失败也进入后台，失败的页面自己显示原因和"重试"
+async function enterApp() {
+  const res = await Promise.allSettled([renderList(), renderLeads()]);
+  showPanel('apps'); $<HTMLElement>('[data-tab="p-overview"]').click(); showView('app');
+  res.forEach((r, i) => { if (r.status === 'rejected') console.warn(`[admin] ${i ? '官网线索' : '开户申请'}读取失败`, r.reason); });
+}
 // 导航上的数字：0 也显示（不再出现空圆圈）；悬停时说明数字的含义
 function setCount(key: 'apps' | 'leads', n: number, meaning: string) {
   const b = $(`[data-count="${key}"]`);
@@ -229,7 +253,7 @@ async function renderList() {
     const n = k === 'all' ? appsCache.length : appsCache.filter((a) => a.status === k).length;
     const b = el('button', '', `${label} ${n}`) as HTMLButtonElement;
     b.type = 'button'; b.setAttribute('aria-pressed', String(filter === k));
-    b.addEventListener('click', () => { filter = k; renderList(); });
+    b.addEventListener('click', () => { filter = k; renderList().catch(() => toast('读取失败，请稍后重试。')); });
     box.appendChild(b);
   }
   setCount('apps', appsCache.filter((a) => a.status === 'submitted').length, '待审核（已提交）');
@@ -396,7 +420,7 @@ function renderSide(r: any) {
   lg.appendChild(ul);
   side.appendChild(lg);
 }
-$('[data-back-list]').addEventListener('click', async () => { await renderList(); showPanel('apps'); });
+$('[data-back-list]').addEventListener('click', () => openListTab('apps'));
 
 // ---------- 启动 ----------
 (async () => {

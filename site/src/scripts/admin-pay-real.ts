@@ -29,6 +29,7 @@ const toolbar = (title: string, ...right: (HTMLElement | null)[]) => h('div', { 
 
 class WErr extends Error { constructor(public code: string, public field?: string) { super(code); } }
 const ERR: Record<string, string> = {
+  internal_error: '服务器出错了，请稍后重试。如果一直出错，看"系统状态"或 Vercel 日志。', http_500: '服务器出错了，请稍后重试。', http_502: '服务器暂时连不上，请稍后重试。', http_503: '服务暂时不可用，请稍后重试。', http_504: '服务器响应超时，请稍后重试。',
   bad_code: '动态码不正确或已经用过，请等下一个动态码。', hot_wallet_insufficient: '热钱包的 USDT 不够，请先归集。', verify_required: '验证码已过期，请重新签名。', bad_signature: '签名和交易的付款地址不一致。',
   invalid_state: '状态已经变化，请刷新后再试。', nothing_to_sweep: '选中的地址在链上已经没有 USDT。', sweep_in_progress: '有地址正在归集中，请等上一次完成。', cold_wallet_not_configured: '还没有配置冷钱包地址。',
   already_initialized: '已经初始化过了。', first_address_mismatch: '服务器算出的第 1 个地址和浏览器不一致，已停止。', private_key_not_allowed: '只能提交公钥。', invalid_fee: '手续费格式不对。', invalid_order_mode: '订单模式的设置超出范围。',
@@ -45,9 +46,13 @@ async function call(a: string, body?: unknown, qs = '') {
 const render: Record<string, (p: HTMLElement) => Promise<void>> = {};
 async function show(tab: string) {
   const p = $(`[data-panel="${tab}"]`);
-  try { await render[tab.slice(2)](p); } catch (e) {
-    p.replaceChildren(toolbar(''), h('p', { class: 'alert' }, errText(e)));
-  }
+  // 走查：接口慢时页面一片空白。0.3 秒还没好就显示"加载中"；出错时显示原因和"重试"
+  const switching = p.dataset.shown !== '1';
+  const slow = switching ? window.setTimeout(() => p.replaceChildren(h('p', { class: 'muted', 'data-loading': '' }, '加载中……')), 300) : 0;
+  try { await render[tab.slice(2)](p); p.dataset.shown = '1'; } catch (e) {
+    p.dataset.shown = '';
+    p.replaceChildren(h('div', { class: 'alert', 'data-load-error': '' }, errText(e), ' ', h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => show(tab) }, '重试')));
+  } finally { clearTimeout(slow); }
   counts();
 }
 async function counts() {
@@ -166,9 +171,9 @@ render.merchants = async (p) => {
     pending.length ? h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '开户已通过，待开通收付款'),
       table(['编号', '企业名称', '授权联系人邮箱', '提现钱包（附录 B）', ''], pending.map((a: any) => [a.ref, a.company, a.email || '—', a.cashout_wallets.length ? mono(shortAddr(a.cashout_wallets[0]), a.cashout_wallets[0]) : '—',
         h('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: () => openMerchant(a) }, '开通商户')]), '—')) : h('span'),
-    table(['商户', '状态', '收款费', '付款费', '订单模式（下限–上限 · 过期 · 回看）', '可用余额', '冻结', '客户数', 'API 提币', '登录账号'], merchants.map((m: any) => [
-      m.name, status(m.status === 'active' ? 'approved' : 'expired', m.status === 'active' ? '已开通' : '已停用'), describeFee(m.fee_in), describeFee(m.fee_out), modeText(m.order_mode),
-      usd(m.available), usd(m.frozen), String(m.customers), m.ip_whitelist.length ? '已设白名单' : h('span', { class: 'muted' }, '未开放（没有白名单）'),
+    table(['商户', '状态', '手续费（收款 / 付款）', '订单模式（下限–上限 · 过期 · 回看）', '可用余额', '客户数', 'API 提币', '登录账号'], merchants.map((m: any) => [
+      m.name, status(m.status === 'active' ? 'approved' : 'expired', m.status === 'active' ? '已开通' : '已停用'), `${describeFee(m.fee_in)} / ${describeFee(m.fee_out)}`, modeText(m.order_mode),
+      sub(usd(m.available), u(m.frozen) ? `冻结 ${usd(m.frozen)}` : ''), String(m.customers), m.ip_whitelist.length ? '已设白名单' : h('span', { class: 'muted' }, '未开放（没有白名单）'),
       m.users.map((x: any) => `${x.email}${x.active ? '' : '（未设置密码）'}`).join('，') || '—']), '暂无商户', { onRow: (i) => editMerchant(merchants[i]) }),
   );
 };
@@ -216,7 +221,7 @@ render.customers = async (p) => {
   q.addEventListener('change', () => { custQ = q.value.trim(); render.customers(p); });
   const { items } = await call('customers', undefined, `&q=${encodeURIComponent(custQ)}&merchant_id=${encodeURIComponent(custM)}`);
   p.replaceChildren(toolbar('客户', sel, q), h('p', { class: 'hint muted' }, '商户的客户由商户自己定义标识，每个客户一个永久地址。这里可以跨商户查找任意客户。'),
-    table(['商户', '客户标识', '名称', '地址', '累计收款', '笔数', '手续费', '未匹配', '未归集', '最近付款'], items.map((x: any) => [x.merchant, mono(x.customer_id), x.name || '—', mono(shortAddr(x.address), x.address), usd(x.total), String(x.count), usd(x.fees), usd(x.unmatched), usd(x.onchain), t(x.last_payment_at)]),
+    table(['商户', '客户标识 · 名称', '地址', '累计收款（笔数）', '手续费', '未匹配', '未归集', '最近付款'], items.map((x: any) => [x.merchant, sub(mono(x.customer_id), x.name || ''), mono(shortAddr(x.address), x.address), sub(usd(x.total), `${x.count} 笔`), usd(x.fees), usd(x.unmatched), usd(x.onchain), t(x.last_payment_at)]),
       '没有找到客户', { onRow: (i) => customerDetail(items[i]) }));
 };
 async function customerDetail(x: any) {
@@ -249,14 +254,14 @@ render.withdrawals = async (p) => {
     toolbar('提币审核', h('span', { class: 'muted' }, `热钱包 ${hotUsdt === null ? '—' : fmtUsdt(hotUsdt)} USDT`)),
     h('p', { class: 'hint muted' }, '每一笔提币都要人工审核（后台和 API 发起的都一样）。有新的提币申请时，系统给你发邮件，1 分钟内的多笔合并成一封。商户看到的处理时效：东八区 8:00–23:00 内 1 小时处理。'),
     filters,
-    table(['', '编号', '提交时间', '已等待', '商户', '类型', '客户', '收款地址', '金额', '手续费', '来源', '状态'], r.items.map((w: any) => {
+    table(['', '编号', '提交时间', '商户', '类型 · 来源', '客户', '收款地址', '金额（手续费）', '状态'], r.items.map((w: any) => {
       const isP = w.status === 'pending';
       const cb = h('input', { type: 'checkbox', class: 'check', checked: isP && wdSel.has(w.id), disabled: !isP, 'aria-label': `选择 ${w.id}` }) as HTMLInputElement;
       cb.addEventListener('change', () => { cb.checked ? wdSel.add(w.id) : wdSel.delete(w.id); render.withdrawals(p); });
       const st = h('span', { class: 'status-cell' }, status(...(WD[w.status] || ['submitted', w.status])));
       if (w.txid) st.append(h('a', { href: `${TRONSCAN}/#/transaction/${w.txid}`, target: '_blank', rel: 'noopener noreferrer', class: 'mono' }, w.txid.slice(0, 8) + '…'));
       if (w.reason) st.append(h('span', { class: 'hint muted' }, w.reason));
-      return [cb, mono(w.id), t(w.created_at), isP ? minsAgo(w.created_at) : '—', w.merchant, w.kind === 'payout' ? '代付' : '商户提现', w.customer_id ? mono(w.customer_id) : '—', mono(shortAddr(w.to), w.to), h('b', {}, usd(w.amount)), usd(w.fee), w.source === 'api' ? 'API' : '后台', st];
+      return [cb, mono(w.id), sub(t(w.created_at), isP ? `已等待 ${minsAgo(w.created_at)}` : ''), w.merchant, `${w.kind === 'payout' ? '代付' : '商户提现'} · ${w.source === 'api' ? 'API' : '后台'}`, w.customer_id ? mono(w.customer_id) : '—', mono(shortAddr(w.to), w.to), sub(h('b', {}, usd(w.amount)), `手续费 ${usd(w.fee)}`), st];
     }), wdAll ? '暂无提币' : '暂无待审核的提币'),
     short ? h('p', { class: 'alert' }, `热钱包余额不足：已选 ${fmtUsdt(need)} USDT，热钱包只有 ${fmtUsdt(hotUsdt!)} USDT。请先归集，或少选几笔。`) : h('span'),
     h('div', { class: 'sumbar' }, h('span', {}, '已选 ', h('b', {}, String(chosen.length)), ' 笔 · 合计打出 ', h('b', {}, `${fmtUsdt(need)} USDT`)),
@@ -325,10 +330,16 @@ render.sweep = async (p) => {
       h('span', {}, '已选 ', h('b', {}, String(chosen.length)), ' 个地址 · 合计约 ', h('b', {}, `${fmtUsdt(chosen.reduce((s: number, x: any) => s + u(x.balance), 0))} USDT`)),
       h('span', { class: 'sumbar-actions' }, '归集到：', toSel, h('button', { type: 'button', class: 'btn btn-primary', disabled: !chosen.length || !RULES.hot, onclick: () => planSweep(p) }, '签名并归集'))),
     b.items.filter((x: any) => x.kind === 'sweep').length ? h('h2', { class: 'h-sm' }, '最近的归集') : h('span'),
-    table(['批次', '状态', '地址', '步骤'], b.items.filter((x: any) => x.kind === 'sweep').slice(0, 10).flatMap((x: any) => (x.items || []).map((it: any) => [mono(x.id), x.status, mono(shortAddr(it.address), it.address),
-      it.steps.map((s: any) => `${KIND[s.kind] || s.kind}：${s.status}`).join(' → ')])), '暂无'),
+    b.items.some((x: any) => x.kind === 'sweep') ? table(['批次', '状态', '地址', '步骤'], b.items.filter((x: any) => x.kind === 'sweep').slice(0, 10).flatMap((x: any) => (x.items || []).map((it: any) => [mono(x.id), BATCH_ST[x.status] || x.status, mono(shortAddr(it.address), it.address),
+      it.steps.map((s: any) => `${KIND[s.kind] || s.kind}：${STEP_ST[s.status] || s.status}`).join(' → ')])), '暂无') : h('span'),
   );
 };
+// 走查：批次和步骤的状态原来直接显示英文代码
+const BATCH_ST: Record<string, string> = { planned: '等待签名', broadcasting: '广播中', stage1: '第 1 步进行中', stage2: '第 2 步进行中', stage3: '第 3 步进行中', done: '完成', failed: '失败', cancelled: '已取消' };
+const STEP_ST: Record<string, string> = { pending: '等待', broadcasting: '广播中', planned: '等待', signed: '已签名', broadcast: '已广播', confirmed: '已确认', done: '完成', failed: '失败', skipped: '跳过' };
+/** 表格里的一格：主要内容 + 下面一行小字 */
+const sub = (main: string | HTMLElement, note: string | HTMLElement) => h('span', { class: 'cell-2' }, main, note ? h('span', { class: 'hint muted' }, note) : null);
+const netName = (n: string) => (n === 'mainnet' ? 'TRON 主网（真实资金）' : n === 'nile' ? 'Nile 测试网' : n);
 async function planSweep(p: HTMLElement) {
   let plan;
   try { plan = await call('sweep-plan', { addresses: [...swSel], to: swTo }); } catch (e) { say(errText(e)); return; }
@@ -371,7 +382,7 @@ render.wallet = async (p) => {
     x ? h('dl', { class: 'kv' }, h('dt', {}, '地址'), h('dd', {}, h('span', { class: 'copy-row' }, mono(x.address), copyBtn(() => x.address, '复制', '已复制', 'link-copy'), tronscan(x.address))),
       h('dt', {}, 'USDT'), h('dd', {}, x.error ? '查询失败' : usd(x.usdt)), h('dt', {}, 'TRX'), h('dd', {}, x.error ? '查询失败' : usd(x.trx))) : h('p', { class: 'm0 muted' }, '没有配置（config/wallets.json）'));
   p.replaceChildren(
-    toolbar('钱包设置', h('span', { class: 'muted' }, `网络：${w.network}`)),
+    toolbar('钱包设置', h('span', { class: 'muted' }, `网络：${netName(w.network)}`)),
     h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '主助记词（收款地址）'),
       w.initialized ? h('dl', { class: 'kv' }, h('dt', {}, '状态'), h('dd', {}, status('approved', '已初始化')), h('dt', {}, '推导路径'), h('dd', {}, mono("m/44'/195'/0'/0/序号")),
         h('dt', {}, '公钥末 8 位'), h('dd', {}, mono(w.xpub_fingerprint)), h('dt', {}, '第 1 个地址（用来核对）'), h('dd', {}, mono(w.first_address)), h('dt', {}, '已分配地址'), h('dd', {}, `${w.customers} 个`))
@@ -414,7 +425,7 @@ render.status = async (p) => {
   const ago = s.tick ? Math.round((Date.now() - Date.parse(s.tick.at)) / 1000) : null;
   const pct = s.db_limit_bytes ? s.db_bytes / s.db_limit_bytes : 0;
   p.replaceChildren(
-    toolbar('系统状态', h('span', { class: 'muted' }, `网络：${s.network}`)),
+    toolbar('系统状态', h('span', { class: 'muted' }, `网络：${netName(s.network)}`)),
     h('div', { class: 'stats' },
       stat('链上监控最后一次运行', ago === null ? '从未运行' : ago < 120 ? `${ago} 秒前` : `${Math.round(ago / 60)} 分钟前`, ago !== null && ago > 300 ? '⚠️ 超过 5 分钟，请检查 cron-job.org' : '每分钟一次（cron-job.org）'),
       stat('扫描到的时间点', s.cursor ? t(new Date(Number(s.cursor)).toISOString()) : '—', s.solid_block ? `链上最新已确认区块 ${Number(s.solid_block.number).toLocaleString('en')}` : 'TronGrid 暂时查询不到'),
