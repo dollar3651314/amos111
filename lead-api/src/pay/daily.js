@@ -42,7 +42,7 @@ export async function runDaily({ db, tron, wallets, notify, now = new Date(), ma
   out.recon = { chain, balances: s.balances, fees, diff, complete };
   out.tokens = found;
   // 客户合计：每个商户下所有客户的收款合计 = 这个商户的收款合计（AC-P19）
-  const mismatch = await db.query(`select m.name from merchants m where coalesce((select sum(amount) from deposits d where d.merchant_id = m.id and d.result = 'credited'), 0)
+  const mismatch = await db.query(`select m.name from merchants m where coalesce((select sum(amount) from ledger l where l.merchant_id = m.id and l.type = 'deposit'), 0)
     <> coalesce((select sum(total) from customers c where c.merchant_id = m.id), 0)`);
   const msgs = [];
   if (diff !== 0 && complete) msgs.push(`对账不一致：链上 ${fmtUsdt(chain)} USDT，应为 ${fmtUsdt(s.balances + fees)} USDT（商户余额 ${fmtUsdt(s.balances)} + 手续费和未入账 ${fmtUsdt(fees)}），差额 ${fmtUsdt(diff)}。如果你从热钱包或冷钱包转出过利润，差额会是负数，属于正常。`);

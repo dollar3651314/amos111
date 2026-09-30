@@ -171,7 +171,7 @@ X-QC-Signature: 5f1c…
 
       <h2 id="callbacks">{T('Callbacks', '回调')}</h2>
       <pre><code>{cbBody}</code></pre>
-      <p>{T('Signature: hex( HMAC-SHA256( Secret, timestamp + "\\n" + raw_body ) ). Reply with any 2xx status. Otherwise we retry after 1 min, 5 min, 30 min, 2 h, 6 h, 12 h and 24 h, then stop; you can resend from the dashboard. The same event can arrive more than once: deduplicate by id.', '签名：hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 原始请求体 ) )。收到后请返回任意 2xx 状态码；否则我们在 1 分钟、5 分钟、30 分钟、2 小时、6 小时、12 小时、24 小时后重试，然后停止，你可以在商户后台手动重发。同一个事件可能收到不止一次，请按 id 去重。')}</p>
+      <p>{T('Signature: hex( HMAC-SHA256( Secret, timestamp + "\\n" + raw_body ) ). Reply with any 2xx status. Otherwise we retry 1 min, 5 min, 30 min, 2 h, 6 h, 12 h and 24 h after the first attempt, then stop; you can resend from the dashboard. The same event can arrive more than once: deduplicate by id.', '签名：hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 原始请求体 ) )。收到后请返回任意 2xx 状态码；否则我们在第一次发送之后的 1 分钟、5 分钟、30 分钟、2 小时、6 小时、12 小时、24 小时重试，然后停止，你可以在商户后台手动重发。同一个事件可能收到不止一次，请按 id 去重。')}</p>
       <pre><code>{cbVerify}</code></pre>
       <h3>{T('Callback body', '回调内容')}</h3>
       <div class="table-scroll"><table class="data-table">

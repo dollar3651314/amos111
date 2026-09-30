@@ -94,7 +94,7 @@ export const OBJECTS = {
     ['address', 'string', ['Receiving address', '收款地址']],
     ['txid', 'string', ['On-chain transaction ID', '链上交易哈希']],
     ['amount', 'amount', ['Amount received', '到账金额']],
-    ['fee', 'amount', ['Collection fee', '收款手续费']],
+    ['fee', 'amount', ['Collection fee (never more than the amount)', '收款手续费（最多等于到账金额）']],
     ['credited', 'amount', ['Amount added to your balance (amount − fee; 0 if below 1 USDT)', '计入余额的金额（到账金额减手续费；低于 1 USDT 时为 0）']],
     ['result', 'string', ['credited, or below_min (under 1 USDT: recorded, not credited)', 'credited（已入账）或 below_min（低于 1 USDT，只记录不入账）']],
     ['order_no', 'string', ['Matched order', '匹配到的订单'], true],

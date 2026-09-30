@@ -25,7 +25,8 @@ export function createFakeTron({ network = 'nile', contract = 'TXYZopYRdj2D9XRtb
       const page = all.slice(start, start + pageSize);
       return { events: page, next: start + pageSize < all.length ? String(start + pageSize) : null };
     },
-    async solidBlock() { return { number: block, time: Date.now() }; },
+    // 替身里的转账一到就算已确认：已确认区块的时间放在未来一点，扫描不会因为"还没确认"而等待
+    async solidBlock() { return { number: block, time: Date.now() + 60_000 }; },
     async txInfo(txid) { const t = txs.get(txid); return t ? { ok: t.ok, fee: 0, energy: 65_000, block } : null; },
     async account(address) { return accounts.get(address) || { activated: false, trx: 0, trc20: {} }; },
     async resources() { return { energyLimit: 820_000, energyUsed: 400_000, totalEnergyLimit: 180_000_000_000, totalEnergyWeight: 19_000_000_000 }; },

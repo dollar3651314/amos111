@@ -100,3 +100,56 @@ test('提币：广播后链上确认才扣除冻结；新申请合并成一封�
   assert.deepEqual(b, { available: 495 * U - 102 * U - 52 * U, frozen: 52 * U });
   void w2;
 });
+
+test('扫链只读到已确认的区块（F2）：还没确认的转账，游标不会越过它，确认后能扫到', async () => {
+  const { db, tron } = await setup();
+  const c = await db.tx((t) => core.ensureCustomer(t, 'm1', 'u9'));
+  const now = Date.now();
+  await core.setMeta(db, 'scan_cursor', now - 60_000);
+  tron.solidBlock = async () => ({ number: 1, time: now - 70_000 }); // 最新已确认区块在 70 秒前
+  tron.pay({ to: c.address, amount: 7 * U, time: now - 20_000 }); // 20 秒前的转账，还没确认
+  const r1 = await scan(db, tron, { now });
+  assert.equal(r1.credited, 0);
+  assert.ok(r1.cursor <= now - 70_000 + 1, '游标不能越过已确认区块');
+  tron.solidBlock = async () => ({ number: 2, time: now + 60_000 }); // 确认了
+  const r2 = await scan(db, tron, { now: now + 90_000 });
+  assert.equal(r2.credited, 1);
+});
+
+test('一笔到账处理失败不会卡住扫链（F1）：记为异常，后面的照常入账', async () => {
+  const { db, tron } = await setup();
+  const a = await db.tx((t) => core.ensureCustomer(t, 'm1', 'ua')), b = await db.tx((t) => core.ensureCustomer(t, 'm1', 'ub'));
+  await core.setMeta(db, 'scan_cursor', Date.now() - 60_000);
+  tron.pay({ to: a.address, amount: 3 * U, time: Date.now() - 2000 });
+  tron.pay({ to: b.address, amount: 4 * U, time: Date.now() - 1000 });
+  const orig = db.tx;
+  let n = 0;
+  db.tx = (fn) => (++n === 1 ? Promise.reject(new Error('boom')) : orig(fn)); // 第一笔处理时出错
+  const errs = [];
+  const r = await scan(db, tron, { onError: (ids) => errs.push(...ids) });
+  db.tx = orig;
+  assert.equal(r.credited, 1);
+  assert.equal(r.failed, 1);
+  assert.equal(errs.length, 1);
+  assert.equal((await db.query(`select count(*)::int n from anomalies where type = 'process_error'`))[0].n, 1);
+});
+
+test('回调重试：从第一次发送算起，最后一次在 24 小时（F5）', async () => {
+  const gaps = RETRY_MIN.map((m, i) => m - (RETRY_MIN[i - 1] ?? 0));
+  assert.equal(gaps.reduce((a, b) => a + b, 0), 24 * 60);
+  assert.ok(gaps.every((g) => g > 0));
+});
+
+test('回调地址：内网地址的各种写法都被拒绝（F4）', async () => {
+  for (const ip of ['127.0.0.1', '::1', '::', '::ffff:127.0.0.1', '::ffff:7f00:1', '::ffff:a9fe:a9fe', '::7f00:1', '64:ff9b::7f00:1', '2002:7f00:1::', 'fc00::1', 'fe80::1', 'ff02::1', '::ffff:10.0.0.1', 'not-an-ip'])
+    assert.equal(isPrivateIp(ip), true, ip);
+  for (const ip of ['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946', '::ffff:93.184.216.34', '64:ff9b::5db8:d822'])
+    assert.equal(isPrivateIp(ip), false, ip);
+  for (const u of ['https://[::ffff:7f00:1]/cb', 'https://[::ffff:a9fe:a9fe]/', 'https://[64:ff9b::7f00:1]/'])
+    assert.equal(await checkCallbackUrl(u), 'private_address', u);
+});
+
+test('回调发送时再检查一次解析结果（F4，DNS 重绑定）：连接时解析到内网就不发送', async () => {
+  const { pinnedFetch } = await import('../src/pay/callbacks.js');
+  await assert.rejects(pinnedFetch('https://merchant.example/cb', { body: '{}' }, async () => [{ address: '127.0.0.1', family: 4 }]), /private_address/);
+});

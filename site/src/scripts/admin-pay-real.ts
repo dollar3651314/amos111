@@ -325,7 +325,7 @@ async function planSweep(p: HTMLElement) {
 }
 
 // ============ 异常到账、对账 ============
-const ANOM: Record<string, [string, string]> = { token: ['不支持的币', '不入账。需要时由你手动处理（例如联系商户后原路退回）'], below_min: ['低于 1 USDT', '不入账、不通知，只记录（防止垃圾转账）'] };
+const ANOM: Record<string, [string, string]> = { token: ['不支持的币', '不入账。需要时由你手动处理（例如联系商户后原路退回）'], below_min: ['低于 1 USDT', '不入账、不通知，只记录（防止垃圾转账）'], process_error: ['处理失败', '这笔到账没有入账，请联系研发处理（扫链没有因此停下）'] };
 render.anomalies = async (p) => {
   const { items } = await call('anomalies');
   p.replaceChildren(toolbar('异常到账'), h('p', { class: 'hint muted' }, '不支持的币每天检查一次，最多晚 24 小时出现在这里。过期后才到的 USDT 不算异常：已入账，记为客户未匹配的到账。'),

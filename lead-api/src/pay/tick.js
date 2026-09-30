@@ -5,23 +5,35 @@ import { recordDeposit, expireOrders, settleWithdrawal, getMeta, setMeta } from 
 import { deliverDue } from './callbacks.js';
 import { fmtUsdt } from './money.js';
 
-const OVERLAP_MS = 60_000; // 每次往前多扫 1 分钟，防止边界上的事件漏掉（重复的由唯一约束去掉）
+const OVERLAP_MS = 3 * 60_000; // 每次往前多扫 3 分钟，防止边界上的事件漏掉（重复的由唯一约束去掉）
+const INDEX_LAG_MS = 30_000; // 已确认的区块，TronGrid 的事件索引可能还要晚几秒才查得到
 const MAX_WINDOW_MS = 10 * 60_000;
 
 /** ① 扫链：从上次的时间点往后读，只处理转到我们客户地址的转账 */
-export async function scan(db, tron, { now = Date.now(), budgetMs = 12_000, maxPages = 40 } = {}) {
+export async function scan(db, tron, { now = Date.now(), budgetMs = 12_000, maxPages = 40, onError } = {}) {
   const started = Date.now();
   const cursor = (await getMeta(db, 'scan_cursor')) ?? now - 5 * 60_000; // 第一次运行：从 5 分钟前开始
   const minTs = Math.max(0, cursor - OVERLAP_MS);
-  const maxTs = Math.min(now, cursor + MAX_WINDOW_MS);
+  // 只读到最新的已确认区块为止（F2）：还没确认的转账现在查不到，游标不能越过它们，否则下一次也扫不到了
+  const solid = await tron.solidBlock();
+  const maxTs = Math.max(minTs, Math.min(now, solid.time - INDEX_LAG_MS, cursor + MAX_WINDOW_MS));
   let fp = null, pages = 0, seen = 0, credited = 0, lastTs = cursor, complete = false;
+  const failed = [];
   while (pages < maxPages && Date.now() - started < budgetMs) {
     const { events, next } = await tron.transfers({ minTs, maxTs, fingerprint: fp });
     pages++; seen += events.length;
     if (events.length) {
       const mine = new Set((await db.query('select address from customers where address = any($1::text[])', [[...new Set(events.map((e) => e.to))]])).map((r) => r.address));
       for (const e of events) {
-        if (mine.has(e.to)) { const r = await recordDeposit(db, e); if (r.status === 'credited') credited++; }
+        if (mine.has(e.to)) {
+          // 一笔处理失败不能卡住所有商户的扫链（F1）：记为异常、通知 Amos，继续处理后面的
+          try { const r = await recordDeposit(db, e); if (r.status === 'credited') credited++; }
+          catch (err) {
+            console.error(`[tick] deposit ${e.txid}:${e.logIndex} failed: ${err.message}`);
+            await db.query(`insert into anomalies (type, address, amount, ref) values ('process_error', $1, $2, $3) on conflict do nothing`, [e.to, `${e.amount / 1e6} USDT`, `${e.txid}:${e.logIndex}`]);
+            failed.push(`${e.txid}:${e.logIndex}`);
+          }
+        }
         lastTs = Math.max(lastTs, e.time);
       }
     }
@@ -30,7 +42,8 @@ export async function scan(db, tron, { now = Date.now(), budgetMs = 12_000, maxP
   }
   // 这一段全部读完：游标移到这一段的结尾；没读完：移到已经处理到的位置
   await setMeta(db, 'scan_cursor', complete ? maxTs : lastTs);
-  return { pages, seen, credited, complete, cursor: complete ? maxTs : lastTs };
+  if (failed.length && onError) await onError(failed);
+  return { pages, seen, credited, complete, cursor: complete ? maxTs : lastTs, failed: failed.length };
 }
 
 /** ③ 已广播的提币：链上确认成功就扣除冻结；失败就解冻并通知 Amos */
@@ -61,7 +74,7 @@ export async function runTick({ db, tron, getTarget, notify, adminUrl = '', fetc
   const t0 = Date.now();
   const out = {};
   const step = async (name, fn) => { try { out[name] = await fn(); } catch (e) { out[name] = { error: e.message }; console.error(`[tick] ${name}: ${e.message}`); } };
-  await step('scan', () => scan(db, tron));
+  await step('scan', () => scan(db, tron, { onError: notify && ((ids) => notify('到账处理失败', `以下链上转账没有处理成功，已记到"异常到账"，请联系研发：\n${ids.join('\n')}`)) }));
   await step('expired', () => expireOrders(db));
   await step('withdrawals', () => confirmWithdrawals(db, tron, { notify }));
   if (confirmSweeps) await step('sweeps', () => confirmSweeps());

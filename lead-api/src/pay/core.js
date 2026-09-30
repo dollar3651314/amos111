@@ -195,9 +195,14 @@ export async function setMatch(db, merchantId, orderId, depositId, match, actor)
   });
 }
 
-/** 到了过期时间、还没达到下限的订单：改为已过期或部分付款（已过期）。由每分钟的任务调用 */
+/**
+ * 到了过期时间、还没达到下限的订单：改为已过期或部分付款（已过期）。由每分钟的任务调用。
+ * 过期后再等 EXPIRY_GRACE_MS 才处理（F3）：链上确认和扫描要 1～2 分钟，过期前付的钱可能过期后才扫到；
+ * 扫到时按链上付款时间匹配（matchOnDeposit），订单这时还没关闭，就能匹配上
+ */
+export const EXPIRY_GRACE_MS = 5 * 60_000;
 export async function expireOrders(db, now = new Date()) {
-  const due = await db.query(`select id, merchant_id from orders where status in ('pending', 'partial') and expires_at <= $1 limit 500`, [now]);
+  const due = await db.query(`select id, merchant_id from orders where status in ('pending', 'partial') and expires_at <= $1 limit 500`, [new Date(now.getTime() - EXPIRY_GRACE_MS)]);
   for (const { id, merchant_id } of due) {
     await db.tx(async (t) => {
       const [row] = await t.query(`select * from orders where id = $1 and status in ('pending', 'partial') for update`, [id]);
@@ -223,7 +228,8 @@ export async function recordDeposit(db, { txid, logIndex, block, to, amount, tim
     if (!c) return { status: 'ignored' };
     await lockCustomer(t, c.merchant_id, c.customer_id);
     const credited = amount >= MIN_CREDIT;
-    const fee = credited ? calcFee(amount, c.fee_in) : 0;
+    // 手续费最多等于到账金额（F1：最低收费大于到账金额时，之前会让余额变成负数、整个扫链停住）
+    const fee = credited ? Math.min(calcFee(amount, c.fee_in), amount) : 0;
     const [d] = await t.query(`insert into deposits (txid, log_index, block, address, merchant_id, customer_id, amount, fee, result, time)
       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) on conflict (txid, log_index) do nothing returning *`,
       [txid, logIndex, block, to, c.merchant_id, c.customer_id, amount, fee, credited ? 'credited' : 'below_min', new Date(time)]);
@@ -232,7 +238,7 @@ export async function recordDeposit(db, { txid, logIndex, block, to, amount, tim
     await t.query('update customers set onchain = onchain + $3 where merchant_id = $1 and customer_id = $2', [c.merchant_id, c.customer_id, amount]);
     if (!credited) {
       await t.query(`insert into anomalies (type, merchant_id, customer_id, address, amount, ref) values ('below_min', $1, $2, $3, $4, $5) on conflict do nothing`,
-        [c.merchant_id, c.customer_id, to, `${amount / 1e6} USDT`, txid]);
+        [c.merchant_id, c.customer_id, to, `${amount / 1e6} USDT`, `${txid}:${logIndex}`]); // 同一笔交易里可能有几次转账（F8）
       return { status: 'below_min', deposit: d };
     }
     const ref = txid.slice(0, 16);
