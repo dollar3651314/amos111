@@ -52,6 +52,12 @@ test('接口入口：Vercel 函数不超过 12 个，没有 [xxx].js 动态文�
   assert.equal((await GET(new Request('https://x.test/api/kyb/?g=admin&a=me'))).status, 503);
 });
 
+test('健康检查：文件存储令牌的格式不对时 blobUpload 为 false（BUG-P6）', async () => {
+  const { loadConfig } = await import('../src/config.js');
+  assert.equal(loadConfig({ BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_AbC123_secret' }).blobUploadToken, true);
+  for (const v of ['', 'abc', 'postgresql://x', 'vercel_blob_rw_']) assert.equal(loadConfig({ BLOB_READ_WRITE_TOKEN: v }).blobUploadToken, false, v);
+});
+
 test('测试环境：邮件标题带"[测试环境]"；健康检查返回 env，且不要求 CRON_SECRET（agents v0.6 C34）', async () => {
   const { envSubject, formatLeadEmail } = await import('../src/mailer.js');
   const { loadConfig } = await import('../src/config.js');
