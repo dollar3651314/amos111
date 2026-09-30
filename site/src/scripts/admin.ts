@@ -212,6 +212,11 @@ function setCount(key: 'apps' | 'leads', n: number, meaning: string) {
   b.setAttribute('aria-label', b.title);
 }
 
+async function refreshAppsCount() {
+  appsCache = (await A.apps()).apps;
+  setCount('apps', appsCache.filter((a) => a.status === 'submitted').length, '待审核（已提交）');
+}
+
 // ---------- 列表 ----------
 let filter = 'all';
 let appsCache: any[] = [];
@@ -354,7 +359,8 @@ function renderSide(r: any) {
     side.appendChild(rel);
   }
   const act = (text: string, cls: string, fn: () => void, show = true) => { if (!show) return; const b = el('button', `btn ${cls}`, text) as HTMLButtonElement; b.type = 'button'; b.dataset.action = text; b.addEventListener('click', fn); side.appendChild(b); };
-  const after = async (msg: string) => { toast(msg); await openDetail(a.id); };
+  // 审核后同时刷新导航上的数字（BUG-P7：之前要刷新页面，"开户申请"的待审核数量才会变）
+  const after = async (msg: string) => { toast(msg); await Promise.all([openDetail(a.id), refreshAppsCount()]); };
   const canReview = a.status === 'submitted';
   act('通过', 'btn-primary', () => dialog('确认通过', el('p', 'm0', `确认通过 ${a.company} 的开户申请？之后请线下完成开户。`), '通过', async () => { await A.decide({ id: a.id, action: 'approve' }); await after('已通过'); }), canReview);
   act('要求补件', 'btn-outline', () => {

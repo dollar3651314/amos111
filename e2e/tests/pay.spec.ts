@@ -85,6 +85,8 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await expect(admin.locator('[data-pdialog]')).toContainText('初始化完成');
     await adminOk(admin);
     await expect(admin.locator('[data-panel="p-wallet"]')).toContainText('已初始化');
+    // 导航上的数字：没有数据时也显示 0，不出现空圆圈（BUG-P7）
+    for (const k of ['merchants', 'withdrawals', 'anomalies']) await expect(admin.locator(`[data-pcount="${k}"]`)).toHaveText(/^\d+$/);
     expect(errs).toEqual([]);
   });
 

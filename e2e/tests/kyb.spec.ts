@@ -334,6 +334,8 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await admin.getByRole('button', { name: '通过' }).click();
     await confirmDialog(admin);
     await expect(admin.locator('[data-toast]')).toContainText('已通过');
+    // 审核后导航上的"待审核"数字马上更新，不需要刷新页面（BUG-P7）
+    await expect(admin.locator('[data-count="apps"]')).toHaveText('0');
     await shot(admin, '后台详情-已通过');
     await expect(admin.locator('[data-side]')).toContainText('业务关系存续期间');
     await expect(admin.locator('.timeline-mini')).toContainText('补件');

@@ -49,18 +49,28 @@ async function show(tab: string) {
   counts();
 }
 async function counts() {
-  const set = (k: string, n: number, meaning: string) => { const b = root.querySelector<HTMLElement>(`[data-pcount="${k}"]`); if (b) { b.textContent = String(n); b.title = `${meaning}：${n}`; } };
-  try {
-    const [m, w, a] = await Promise.all([call('merchants'), call('withdrawals'), call('anomalies')]);
-    set('merchants', m.merchants.filter((x: any) => x.status === 'active').length, '已开通的商户');
-    set('withdrawals', w.items.length, '待审核的提币');
-    set('anomalies', a.items.filter((x: any) => !x.handled).length, '未处理的异常到账');
-  } catch { /* 还没配置时不显示数字 */ }
+  const set = (k: string, n: number | null, meaning: string) => {
+    const b = root.querySelector<HTMLElement>(`[data-pcount="${k}"]`);
+    if (!b) return;
+    b.textContent = n === null ? '' : String(n); // 读取失败时不显示（CSS 隐藏空的数字），不出现空圆圈
+    b.title = n === null ? '' : `${meaning}：${n}`;
+  };
+  // 三个数字分别读取：一个失败不影响其他两个（BUG-P7：之前任何一个失败，三个都不显示）
+  const jobs: [string, string, () => Promise<number>][] = [
+    ['merchants', '已开通的商户', async () => (await call('merchants')).merchants.filter((x: any) => x.status === 'active').length],
+    ['withdrawals', '待审核的提币', async () => (await call('withdrawals')).items.length],
+    ['anomalies', '未处理的异常到账', async () => (await call('anomalies')).items.filter((x: any) => !x.handled).length],
+  ];
+  await Promise.all(jobs.map(async ([k, meaning, f]) => {
+    try { set(k, await f(), meaning); } catch (e) { set(k, null, meaning); console.warn(`[admin] 导航数字 ${k} 读取失败：${(e as WErr).code || e}`); }
+  }));
 }
 if (!PROTO) {
   root.querySelectorAll<HTMLElement>('[data-tab^="p-"]').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab!)));
   // 登录后刷新导航上的数字
   new MutationObserver(() => { if (!$('[data-view="app"]').hidden) counts(); }).observe($('[data-view="app"]'), { attributes: true, attributeFilter: ['hidden'] });
+  // 页面打开时已经是登录状态（观察者注册之前就显示了后台）：也读取一次
+  if (!$('[data-view="app"]').hidden) counts();
 }
 
 // ============ 签名 ============
