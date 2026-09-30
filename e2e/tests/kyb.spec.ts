@@ -248,8 +248,9 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await ctx.close();
 
     // Amos 收到通知，但通知里没有敏感信息
+    // 通知邮件在提交返回之后才异步发送（waitUntil）：等邮件到了再检查，不要马上读
+    await expect.poll(() => mailsTo('sales@quickcomepay.test').filter((m) => m.includes(ref)).length, { timeout: 10_000 }).toBeGreaterThan(0);
     const note = mailsTo('sales@quickcomepay.test').filter((m) => m.includes(ref)).at(-1)!;
-    expect(note).toBeTruthy();
     for (const s of ['C9876543', '5 Le Loi', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE']) expect(note).not.toContain(s);
   });
 

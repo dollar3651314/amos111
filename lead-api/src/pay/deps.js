@@ -39,7 +39,7 @@ export async function createPayDeps({ config, kyb, send, getIp, origin }) {
     v1: createApiV1({ db, keys, ops, getIp }),
     merchant: createMerchantApi({ db, keys, ops, send }),
     pay: createPayApi({ db }),
-    wallet: createWalletApi({ db, tron, keys, wallets, send, origin, notify, listApproved, ...gate }),
+    wallet: createWalletApi({ db, tron, keys, wallets, send, origin, notify, listApproved, runDaily: () => runDaily({ db, tron, wallets, notify }), ...gate }),
     tick: () => runTick({ db, tron, getTarget, notify, adminUrl: `${origin}/admin/`, confirmSweeps: () => sweepProgress(db, tron, { notify }) }),
     daily: () => runDaily({ db, tron, wallets, notify }),
   };

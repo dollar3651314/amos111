@@ -50,11 +50,20 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
     },
     async getCustomer(m, id) { return customerView(await needCustomer(m, id)); },
     async listCustomers(m, { q = '', cursor = null, limit = 50 }) {
-      const vals = [m.id, limit + 1];
+      const vals = [m.id];
       let where = 'merchant_id = $1';
-      if (q) { vals.push(`%${q}%`, q); where += ` and (customer_id ilike $${vals.length - 1} or name ilike $${vals.length - 1} or address = $${vals.length})`; }
       if (cursor) { vals.push(new Date(Number(cursor))); where += ` and created_at < $${vals.length}`; }
-      const rows = await db.query(`select * from customers where ${where} order by created_at desc limit $2`, vals);
+      let rows;
+      if (q) {
+        // 按客户标识、名称、邮箱模糊搜索，或按地址精确搜索。邮箱是加密保存的，只能解密后在这里比对：
+        // 每次最多比对最近的 5000 个客户（试用阶段足够；客户很多时再改为保存邮箱的检索用哈希）
+        const needle = q.toLowerCase();
+        const cand = await db.query(`select * from customers where ${where} order by created_at desc limit 5000`, vals);
+        rows = cand.filter((r) => r.address === q || [r.customer_id, r.name, dec(r.email_enc)].some((v) => (v || '').toLowerCase().includes(needle))).slice(0, limit + 1);
+      } else {
+        vals.push(limit + 1);
+        rows = await db.query(`select * from customers where ${where} order by created_at desc limit $${vals.length}`, vals);
+      }
       const p = page(rows.map((r) => ({ ...r, cursor: new Date(r.created_at).getTime() })), limit);
       return { items: p.items.map(customerView), next_cursor: p.next_cursor };
     },

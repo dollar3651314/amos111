@@ -38,7 +38,7 @@ export async function runDaily({ db, tron, wallets, notify, now = new Date(), ma
   const complete = checked === addrs.length;
   await db.query(`insert into recon (day, balances, chain, fees, diff, detail) values ($1, $2, $3, $4, $5, $6::jsonb)
     on conflict (day) do update set balances = excluded.balances, chain = excluded.chain, fees = excluded.fees, diff = excluded.diff, detail = excluded.detail, created_at = now()`,
-    [day, s.balances, chain, fees, diff, JSON.stringify({ addresses: chainAddr, hot, cold, checked, total: addrs.length, complete })]);
+    [day, s.balances, chain, fees, diff, JSON.stringify({ addresses: chainAddr, hot, cold, checked, address_count: addrs.length, complete })]);
   out.recon = { chain, balances: s.balances, fees, diff, complete };
   out.tokens = found;
   // 客户合计：每个商户下所有客户的收款合计 = 这个商户的收款合计（AC-P19）

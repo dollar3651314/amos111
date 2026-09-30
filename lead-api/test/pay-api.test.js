@@ -121,3 +121,17 @@ test('vercel.json：改写到函数的目标地址以 / 结尾（trailingSlash �
   assert.deepEqual(v1, { source: '/api/v1/(.*)', destination: '/api/v1/?p=$1' });
   for (const u of ['/api/v1/balance/', '/api/v1/orders/ORD-1/']) assert.match(u, /^\/api\/v1(?:\/(.*))$/);
 });
+
+test('客户搜索：按客户标识、名称、邮箱模糊搜索（邮箱加密保存，解密后比对），按地址精确搜索', async () => {
+  const { a, call } = await setup();
+  const c1 = (await call(a.cred, 'POST', 'customers/', { customer_id: 'user_101', name: 'Lin Trading', email: 'Lin@Example.com' })).body;
+  await call(a.cred, 'POST', 'customers/', { customer_id: 'shop-9', name: 'Harbor', email: 'ops@harbor.test' });
+  const ids = async (q) => (await call(a.cred, 'GET', `customers/list/?q=${encodeURIComponent(q)}`)).body.items.map((x) => x.customer_id).sort();
+  assert.deepEqual(await ids('user_1'), ['user_101']);
+  assert.deepEqual(await ids('trad'), ['user_101']);
+  assert.deepEqual(await ids('lin@example'), ['user_101']); // 邮箱，不区分大小写
+  assert.deepEqual(await ids('harbor.test'), ['shop-9']);
+  assert.deepEqual(await ids(c1.address), ['user_101']);
+  assert.deepEqual(await ids(c1.address.slice(0, 10)), []); // 地址只精确匹配
+  assert.deepEqual(await ids(''), ['shop-9', 'user_101']);
+});

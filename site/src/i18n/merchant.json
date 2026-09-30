@@ -394,6 +394,14 @@
       "not_configured": "The service is not configured yet.",
       "unauthorized": "Your session has ended. Please sign in again.",
       "generic": "Something went wrong. Please try again."
+    },
+    "picker": {
+      "placeholder": "Search by customer ID, name or email, or type a new ID",
+      "newCustomer": "+ New customer: {id}",
+      "none": "No matching customer. Type a new ID to create one.",
+      "empty": "No customers yet. Type an ID to create one.",
+      "existing": "Existing customer: name and email filled in. Edit them on the Customers page.",
+      "isNew": "New customer: it will be created with a permanent address when you submit."
     }
   },
   "zh": {
@@ -791,6 +799,14 @@
       "not_configured": "服务还没有配置好。",
       "unauthorized": "登录已过期，请重新登录。",
       "generic": "操作失败，请稍后重试。"
+    },
+    "picker": {
+      "placeholder": "输入客户编号、名称或邮箱搜索；也可以输入新的编号",
+      "newCustomer": "+ 新建客户：{id}",
+      "none": "没有找到匹配的客户。输入一个新的编号可以新建客户。",
+      "empty": "还没有客户，输入一个编号即可新建。",
+      "existing": "已有客户：名称和邮箱已自动带出。需要修改请到“客户”页面。",
+      "isNew": "新客户：提交时会自动创建客户，并分配一个永久收款地址。"
     }
   }
 }

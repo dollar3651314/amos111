@@ -205,7 +205,7 @@ export const ENDPOINTS = [
   },
   {
     method: 'GET', path: 'customers/list/', title: ['List customers', '客户列表'],
-    query: [['q', 'string', false, ['Search by customer ID or name (partial), or by exact address', '按客户标识或名称搜索（部分匹配），或按地址精确搜索']], ...PAGING],
+    query: [['q', 'string', false, ['Search by customer ID, name or email (partial, case-insensitive), or by exact address', '按客户标识、名称或邮箱搜索（部分匹配，不区分大小写），或按地址精确搜索']], ...PAGING],
     returns: ['Customer'], list: true,
   },
   {
