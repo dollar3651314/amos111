@@ -230,4 +230,21 @@ export async function migrate(db) {
   if (db.exec) await db.exec(SCHEMA); else await db.query(SCHEMA);
   await db.query(`insert into pay_meta (key, value) values ('schema_version', $1::jsonb)
     on conflict (key) do update set value = excluded.value, updated_at = now()`, [JSON.stringify(SCHEMA_VERSION)]);
+  await repairDoubleEncoded(db);
+}
+
+/**
+ * BUG-P5 的一次性修复：修复之前，线上（postgres.js）存进 jsonb 的值被多编码了一层，成了 JSON 字符串。
+ * 只处理"字符串里装的是对象、数组、字符串或数字"的值，这些不可能是正常数据；修完记一个标记，以后不再执行。
+ */
+export async function repairDoubleEncoded(db) {
+  const [done] = await db.query(`select 1 from pay_meta where key = 'repair_p5'`);
+  if (done) return;
+  const cols = await db.query(`select table_name t, column_name c from information_schema.columns
+    where table_schema = current_schema() and data_type = 'jsonb' order by 1, 2`);
+  for (const { t, c } of cols) {
+    await db.query(`update ${t} set ${c} = (${c} #>> '{}')::jsonb
+      where jsonb_typeof(${c}) = 'string' and (${c} #>> '{}') ~ '^(\\{|\\[|"|-?[0-9]+(\\.[0-9]+)?$)'`);
+  }
+  await db.query(`insert into pay_meta (key, value) values ('repair_p5', 'true'::jsonb) on conflict (key) do nothing`);
 }

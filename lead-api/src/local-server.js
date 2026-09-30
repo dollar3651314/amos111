@@ -74,7 +74,7 @@ const kybAdmin = createAdminHandler({ repo: kybRepo, blobs: kybBlobs, send: kybS
 const kybCleanup = createCleanup({ repo: kybRepo, blobs: kybBlobs });
 
 // v6 收付款：数据库用内嵌 Postgres（DATA_DIR/paydb），链上用 TronGrid 替身（FAKE_TRON=0 且配置了 TRONGRID_API_KEY 时才连真实网络）
-const payConfig = { ...config, appSecret: process.env.APP_SECRET || 'local-dev-secret-local-dev-secret-0123456789', localDbDir: config.localDbDir || join(DATA, 'paydb'), fakeTron: process.env.FAKE_TRON !== '0', databaseUrl: '' };
+const payConfig = { ...config, appSecret: process.env.APP_SECRET || 'local-dev-secret-local-dev-secret-0123456789', localDbDir: config.localDbDir || join(DATA, 'paydb'), fakeTron: process.env.FAKE_TRON !== '0', databaseUrl: process.env.LOCAL_PG_URL || '' }; // LOCAL_PG_URL：本地测试改用真实 Postgres（BUG-P5）
 const payPromise = createPayDeps({ config: payConfig, kyb: { redis: kybRedis, keys: kybKeys, listApproved: approvedFromKyb(kybRepo) }, send: kybSend, getIp: (req) => req.headers.get('x-real-ip'), origin: `http://127.0.0.1:${PORT}` });
 
 async function toRequest(req) {

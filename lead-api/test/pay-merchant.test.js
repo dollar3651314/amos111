@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { HDKey } from '@scure/bip32';
-import { createLiteDb } from '../src/pay/db.js';
+import { createTestDb } from '../src/pay/db.js';
 import { migrate } from '../src/pay/schema.js';
 import * as core from '../src/pay/core.js';
 import { createOps } from '../src/pay/ops.js';
@@ -16,7 +16,7 @@ const XPUB = HDKey.fromMasterSeed(mnemonicToSeedSync('abandon abandon abandon ab
 const keys = derivePayKeys('test-app-secret-test-app-secret-0123456789');
 
 async function setup() {
-  const db = await createLiteDb(); await migrate(db);
+  const db = await createTestDb(); await migrate(db);
   await core.setMeta(db, 'xpub', XPUB);
   const ops = createOps({ db, keys, payBase: 'https://pay.test' });
   const m = await core.createMerchant(db, { id: 'm1', name: 'Acme', feeIn: { ppm: 10_000, fixed: 0, min: 0 }, feeOut: { ppm: 0, fixed: 2 * U, min: 0 } });
