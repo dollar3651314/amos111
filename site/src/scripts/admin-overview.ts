@@ -11,7 +11,7 @@ export interface OverviewData {
     assets_total: Amt; unswept_total: Amt; hot_usdt: Amt; cold_usdt: Amt; cold_configured: boolean;
     profit_total: Amt; profit_now: Amt; profit_after_sweep: Amt; income_fee_in: Amt; income_fee_out: Amt; income_dust: Amt;
   };
-  todo: { withdrawals_count: number; withdrawals_amount: Amt; kyb_pending: number | null; merchants_to_open: number; anomalies: number; callbacks_failed: number };
+  todo: { withdrawals_count: number; withdrawals_amount: Amt; kyb_pending: number | null; merchants_to_open: number | null; anomalies: number; callbacks_failed: number };
   sweep: { unswept_total: Amt; address_count: number; over_threshold: number; over_threshold_total: Amt; threshold: Amt; hot_trx: Amt; energy_left: number | null; energy_per_sweep: number; month_sweep_trx: Amt };
   periods: Record<'today' | 'd7' | 'd30', { amount: Amt; count: number; fees_in: Amt; active_merchants: number; new_customers: number; orders_done: number; orders_closed: number }>;
   top_merchants: { name: string; amount: Amt; count: number }[];
@@ -55,7 +55,7 @@ export function renderOverview(p: HTMLElement, d: OverviewData, go: (tab: string
     h('div', { class: 'todo-grid' },
       link('笔提币待审核', 'p-withdrawals', t.withdrawals_count, t.withdrawals_count ? `${usd(t.withdrawals_amount)} USDT` : ''),
       t.kyb_pending === null ? null : link('份开户申请待审核', 'apps', t.kyb_pending),
-      link('个商户待开通收付款', 'p-merchants', t.merchants_to_open),
+      t.merchants_to_open === null ? null : link('个商户待开通收付款', 'p-merchants', t.merchants_to_open),
       link('条异常到账未处理', 'p-anomalies', t.anomalies),
       link('条回调 24 小时内发送失败', 'p-status', t.callbacks_failed),
     ),

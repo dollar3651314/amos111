@@ -266,6 +266,16 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
      * 热钱包、冷钱包实时查链上；查不到时相关的数字返回 null，页面显示"—"。
      */
     async overview() {
+      // 每一部分单独计时；链上和开户数据这类外部查询最多等 6 秒，超时就返回 null（页面显示"—"），不让整页超时（生产出现过 504）
+      const timing = {};
+      const t0 = Date.now();
+      const within = async (name, p, ms = 6000, fallback = null) => {
+        const s0 = Date.now();
+        let timer;
+        try { return await Promise.race([p, new Promise((res) => { timer = setTimeout(() => { timing[`${name}_timeout`] = true; res(fallback); }, ms); })]); }
+        catch (e) { console.error(`[overview] ${name}: ${e.message}`); return fallback; }
+        finally { clearTimeout(timer); timing[name] = Date.now() - s0; }
+      };
       const one = async (sql, p = []) => (await db.query(sql, p))[0];
       const DAY0 = `(date_trunc('day', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai')`; // 东八区的今天 0 点
       const [col, bal, fin, fout, dust, uns, big] = await Promise.all([
@@ -278,7 +288,8 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
         one(`select count(*)::int n, coalesce(sum(onchain), 0)::bigint v from customers where onchain >= $1`, [100 * 1_000_000]),
       ]);
       const chain = async (a) => { if (!a) return { usdt: 0, trx: 0 }; try { const acc = await tron.account(a); return { usdt: Number(acc.trc20[tron.contract]) || 0, trx: acc.trx }; } catch { return null; } };
-      const [h, c] = await Promise.all([chain(hot), chain(cold)]);
+      timing.db_funds = Date.now() - t0;
+      const [h, c, r] = await Promise.all([within('chain_hot', chain(hot)), within('chain_cold', chain(cold)), within('energy', tron.resources(hot))]);
       const owed = bal.available + bal.frozen;
       const wallets = h && c ? h.usdt + c.usdt : null;
       const assets = wallets === null ? null : uns.v + wallets;
@@ -301,13 +312,16 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
         one('select count(*)::int n from anomalies where not handled'),
         one(`select count(*)::int n from callbacks where status = 'failed' and created_at > now() - interval '24 hours'`),
       ]);
-      const opened = new Set((await db.query('select kyb_ref from merchants where kyb_ref is not null')).map((r) => r.kyb_ref));
-      const toOpen = (await listApproved().catch(() => [])).filter((a) => !opened.has(a.ref)).length;
+      const opened = new Set((await db.query('select kyb_ref from merchants where kyb_ref is not null')).map((x) => x.kyb_ref));
+      const [approved, kybPending] = await Promise.all([within('kyb_approved', listApproved(), 6000, null), within('kyb_pending', pendingKyb(), 6000, null)]);
+      const toOpen = approved === null ? null : approved.filter((a) => !opened.has(a.ref)).length;
       const tick = await getMeta(db, 'tick_last');
       const [rc] = await db.query('select day, diff, detail from recon order by day desc limit 1');
       const [size] = await db.query('select pg_database_size(current_database())::bigint bytes').catch(() => [{ bytes: 0 }]);
-      const r = await tron.resources(hot).catch(() => null);
+      timing.total = Date.now() - t0;
+      console.log(`[overview] ${JSON.stringify(timing)}`);
       return {
+        timing_ms: timing,
         funds: {
           collected_total: col.v, deposit_count: col.n,
           owed_total: owed, owed_available: bal.available, owed_frozen: bal.frozen,
@@ -317,7 +331,7 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
           profit_after_sweep: assets === null ? null : assets - owed - Math.max(0, wallets - owed),
           income_fee_in: fin.v, income_fee_out: fout.v, income_dust: dust.v,
         },
-        todo: { withdrawals_count: wd.n, withdrawals_amount: wd.amount, kyb_pending: await pendingKyb().catch(() => null), merchants_to_open: toOpen, anomalies: an.n, callbacks_failed: cbf.n },
+        todo: { withdrawals_count: wd.n, withdrawals_amount: wd.amount, kyb_pending: kybPending, merchants_to_open: toOpen, anomalies: an.n, callbacks_failed: cbf.n },
         sweep: { unswept_total: uns.v, address_count: uns.n, over_threshold: big.n, over_threshold_total: big.v, threshold: 100 * 1_000_000, hot_trx: h ? h.trx : null, energy_left: r ? Math.max(0, r.energyLimit - r.energyUsed) : null, energy_per_sweep: ENERGY_PER_SWEEP, month_sweep_trx: sweepTrx },
         periods: { today, d7, d30 },
         top_merchants: top.map((t) => ({ name: t.name, amount: t.amount, count: t.n })),
