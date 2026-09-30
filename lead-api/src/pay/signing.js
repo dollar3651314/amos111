@@ -29,3 +29,32 @@ export function signerOf(txIdHex, sigHex) {
     return addressOfPublicKey(pub);
   } catch { return null; }
 }
+
+/**
+ * 从"私钥或助记词"里取出某个地址的私钥（浏览器里用：签名框的热钱包一栏两种都可以填）。
+ * - 64 位十六进制：直接当私钥，核对地址。
+ * - 12/24 个单词：按 TRON 的推导路径找这个地址。TronLink 同一个钱包里的多个账户可能在 m/44'/195'/0'/0/i 或 m/44'/195'/i'/0/0，
+ *   两种都试前 20 个。
+ * 返回 { key } 或 { error: 'format' | 'mnemonic' | 'mismatch' | 'not_found' }
+ */
+export async function keyForAddress(input, address) {
+  const v = String(input || '').trim();
+  const hexStr = v.replace(/^0x/i, '');
+  if (/^[0-9a-fA-F]{64}$/.test(hexStr)) {
+    const key = hex.decode(hexStr.toLowerCase());
+    return addressOfPrivateKey(key) === address ? { key } : { error: 'mismatch' };
+  }
+  const words = v.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length !== 12 && words.length !== 24) return { error: 'format' };
+  const [{ mnemonicToSeedSync, validateMnemonic }, { wordlist }, { HDKey }] = await Promise.all([import('@scure/bip39'), import('@scure/bip39/wordlists/english'), import('@scure/bip32')]);
+  const phrase = words.join(' ');
+  if (!validateMnemonic(phrase, wordlist)) return { error: 'mnemonic' };
+  const root = HDKey.fromMasterSeed(mnemonicToSeedSync(phrase));
+  for (let i = 0; i < 20; i++) {
+    for (const path of [`m/44'/195'/0'/0/${i}`, `m/44'/195'/${i}'/0/0`]) {
+      const key = root.derive(path).privateKey;
+      if (key && addressOfPrivateKey(key) === address) return { key };
+    }
+  }
+  return { error: 'not_found' };
+}

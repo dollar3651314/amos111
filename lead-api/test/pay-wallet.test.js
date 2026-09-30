@@ -154,3 +154,17 @@ test('同一笔交易里两次低于 1 USDT 的转账，异常到账各记一条
   for (const i of [0, 1]) await core.recordDeposit(db, { txid: 'f8'.padEnd(64, '0'), logIndex: i, block: 1, to: a.address, amount: 1, time: new Date() });
   assert.equal((await db.query(`select count(*)::int n from anomalies where type = 'below_min'`))[0].n, 2);
 });
+
+test('热钱包一栏可以填私钥或助记词：助记词按 TRON 路径找到热钱包地址（TronLink 的账户）', async () => {
+  const { keyForAddress, addressOfPrivateKey } = await import('../src/pay/signing.js');
+  const words = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  const first = 'TUEZSdKsoDHQMeZwihtdoBiN46zxhGWYdH'; // 公开测试助记词的第 0 个地址（和 TronLink 一致）
+  const r = await keyForAddress(`  ${words.toUpperCase()} `, first);
+  assert.equal(addressOfPrivateKey(r.key), first);
+  const hexKey = Buffer.from(r.key).toString('hex');
+  assert.equal(addressOfPrivateKey((await keyForAddress(hexKey, first)).key), first); // 私钥
+  assert.equal((await keyForAddress(hexKey, HOT)).error, 'mismatch');
+  assert.equal((await keyForAddress(words, HOT)).error, 'not_found');
+  assert.equal((await keyForAddress('abandon about', first)).error, 'format');
+  assert.equal((await keyForAddress(words.replace('about', 'abandon'), first)).error, 'mnemonic');
+});

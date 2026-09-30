@@ -21,6 +21,13 @@ export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, f
     if (!res.ok) throw Object.assign(new Error(`trongrid ${res.status} ${path.split('?')[0]}`), { status: res.status });
     return res.json();
   }
+  /** USDT 合约的 balanceOf：激活与否都能查到 */
+  async function usdtBalance(address) {
+    const r = await call('/wallet/triggerconstantcontract', { owner_address: address, contract_address: contract, function_selector: 'balanceOf(address)', parameter: hexParam(address), visible: true });
+    const hex = r.constant_result?.[0];
+    if (!r.result?.result || !hex) throw new Error('balance_query_failed');
+    return Number(BigInt(`0x${hex}`));
+  }
   return {
     network, contract,
     /**
@@ -53,11 +60,17 @@ export function createTronGrid({ network = 'mainnet', apiKey = '', usdt, base, f
     async account(address) {
       const r = await call(`/v1/accounts/${address}`);
       const a = (r.data || [])[0];
-      if (!a) return { activated: false, trx: 0, trc20: {} };
+      // USDT 余额直接向合约查询（BUG-P21）：没有激活的地址（只收过 USDT、没收过 TRX，新客户地址都是这样），
+      // 账户接口什么都不返回，之前会当成 0，新地址无法归集，对账也漏算
+      const usdt = await usdtBalance(address);
+      if (!a) return { activated: false, trx: 0, trc20: usdt ? { [contract]: usdt } : {} };
       const trc20 = Object.assign({}, ...(a.trc20 || []));
       // 其他代币的余额可能超过 JS 能精确表示的范围：放不下的保留原始字符串（只用于显示），USDT 的余额一定放得下
-      return { activated: true, trx: a.balance || 0, trc20: Object.fromEntries(Object.entries(trc20).map(([k, v]) => [k, Number.isSafeInteger(Number(v)) ? Number(v) : String(v)])) };
+      const out = Object.fromEntries(Object.entries(trc20).map(([k, v]) => [k, Number.isSafeInteger(Number(v)) ? Number(v) : String(v)]));
+      if (usdt) out[contract] = usdt; else delete out[contract];
+      return { activated: true, trx: a.balance || 0, trc20: out };
     },
+    usdtBalance,
     /** 账户的能量和带宽 */
     async resources(address) {
       const r = await call('/wallet/getaccountresource', { address, visible: true });

@@ -6,10 +6,9 @@
 import { mnemonicToSeedSync, validateMnemonic, generateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { HDKey } from '@scure/bip32';
-import { hex } from '@scure/base';
 import wallets from '../../../config/wallets.json';
 import { checkStep } from '../../../lead-api/src/pay/verify.js';
-import { signTxId, addressOfPrivateKey } from '../../../lead-api/src/pay/signing.js';
+import { signTxId, addressOfPrivateKey, keyForAddress } from '../../../lead-api/src/pay/signing.js';
 import { decodeRaw } from '../../../lead-api/src/pay/txcodec.js';
 import { describeFee, fmtUsdt, parseUsdt, shortAddr } from '../lib/money';
 import { copyBtn, field, fieldErr, fmtTime, h, mono, stat, status, table, toast } from './ui';
@@ -99,21 +98,23 @@ function signDialog(job: SignJob) {
     h('p', { class: 'hint muted m0' }, `热钱包：${RULES.hot || '（没有配置）'}${RULES.cold ? ` · 冷钱包：${RULES.cold}` : ''}。大额打款前，可以在 Tronscan 上再核对一次收款地址。`),
     field('ps-code', '验证器动态码（6 位）', code),
     job.needMnemonic ? field('ps-mn', '主助记词（只在本页面使用，签名后立即清除，不会发送给服务器）', mn) : null,
-    field('ps-hot', '热钱包私钥（64 位十六进制；只在本页面使用，签名后立即清除，不会发送给服务器）', hot),
+    field('ps-hot', '热钱包的私钥或助记词（64 位十六进制的私钥，或 TronLink 里这个钱包的 12/24 个单词；只在本页面使用，签名后立即清除，不会发送给服务器）', hot),
   );
   const ok = $<HTMLButtonElement>('[data-pdialog-ok]');
   dialog(job.title, body, '签名并广播', async () => {
     if (bad.length) return false;
     let err = fieldErr(code, /^\d{6}$/.test(code.value.trim()) ? null : '请输入 6 位动态码');
-    const hotHex = hot.value.trim().replace(/^0x/i, '');
-    err = fieldErr(hot, /^[0-9a-fA-F]{64}$/.test(hotHex) ? null : '请输入 64 位十六进制的私钥') || err;
+    const hotIn = hot.value;
+    err = fieldErr(hot, hotIn.trim() ? null : '请输入热钱包的私钥或助记词') || err;
     const words = mn.value.trim().toLowerCase().split(/\s+/).join(' ');
     if (job.needMnemonic) err = fieldErr(mn, validateMnemonic(words, wordlist) ? null : '助记词不正确（检查单词和顺序）') || err;
     if (err) return false;
     ok.disabled = true;
     try {
-      const hotKey = hex.decode(hotHex.toLowerCase());
-      if (addressOfPrivateKey(hotKey) !== RULES.hot) { fieldErr(hot, '这个私钥对应的地址不是热钱包'); return false; }
+      // 私钥或助记词都可以：助记词时在浏览器里推导，找出热钱包地址的私钥
+      const kr = await keyForAddress(hotIn, RULES.hot);
+      if (!kr.key) { fieldErr(hot, { format: '请输入 64 位十六进制的私钥，或 12/24 个单词的助记词', mnemonic: '助记词不正确（检查单词和顺序）', mismatch: '这个私钥对应的地址不是热钱包', not_found: '这组助记词里找不到热钱包地址（前 20 个账户都不是）' }[kr.error]); return false; }
+      const hotKey = kr.key;
       const acct = job.needMnemonic ? HDKey.fromMasterSeed(mnemonicToSeedSync(words)).derive(ACCOUNT) : null;
       // 签名前先把验证码交给服务器验证（需求 §7）
       try { await call('sign-verify', { batch_id: job.batchId, code: code.value.trim() }); } catch (e) { fieldErr(code, errText(e)); return false; }
