@@ -358,7 +358,7 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
     },
   };
 
-  return async function handle(request) {
+  const handle = async function handle(request) {
     try {
       const url = new URL(request.url);
       const a = url.searchParams.get('a') || '';
@@ -373,6 +373,8 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
       return errorResponse(e);
     }
   };
+  handle.actions = Object.keys(actions); // 项目索引的测试用：检查每个动作都写进了《项目索引》
+  return handle;
 }
 
 /**
