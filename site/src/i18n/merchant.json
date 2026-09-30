@@ -43,10 +43,15 @@
     },
     "common": {
       "none": "None yet",
+      "loading": "Loading…",
+      "retry": "Retry",
+      "more": "Show more ({n} left)",
+      "truncated": "Only the latest {n} records are shown. Use Export CSV for the full history.",
       "usdt": "USDT",
       "copy": "Copy",
       "copied": "Copied",
       "cancel": "Cancel",
+      "close": "Close",
       "confirm": "Confirm",
       "save": "Save",
       "saved": "Saved",
@@ -290,6 +295,8 @@
       },
       "results": {
         "ok": "Delivered ({code})",
+        "queued": "Waiting to send",
+        "noResponse": "no response",
         "retrying": "Retrying (last {code})",
         "failed": "Gave up after 24 h"
       },
@@ -448,10 +455,15 @@
     },
     "common": {
       "none": "暂无",
+      "loading": "加载中……",
+      "retry": "重试",
+      "more": "显示更多（还有 {n} 条）",
+      "truncated": "只显示最近 {n} 条，完整记录请用“导出 CSV”。",
       "usdt": "USDT",
       "copy": "复制",
       "copied": "已复制",
       "cancel": "取消",
+      "close": "关闭",
       "confirm": "确定",
       "save": "保存",
       "saved": "已保存",
@@ -695,6 +707,8 @@
       },
       "results": {
         "ok": "成功（{code}）",
+        "queued": "等待发送",
+        "noResponse": "没有响应",
         "retrying": "重试中（上次 {code}）",
         "failed": "24 小时后停止重试"
       },

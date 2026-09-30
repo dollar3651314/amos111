@@ -19,17 +19,33 @@ export function h(tag: string, attrs: Record<string, any> = {}, ...kids: Child[]
 /** 用 {name} 占位符替换文案里的变量 */
 export const tpl = (s: string, v: Record<string, string | number>) => s.replace(/\{(\w+)\}/g, (_, k) => String(v[k] ?? ''));
 
-export function table(cols: string[], rows: Child[][], emptyText: string, opts: { onRow?: (i: number) => void; rowAttrs?: (i: number) => Record<string, any> } = {}): HTMLElement {
+/**
+ * 表格。opts.page：行很多时先显示 size 行，底部"显示更多"按钮每次再显示 size 行；
+ * opts.page.note：列表没有取完时（例如超过 1000 条）显示在表格下面的说明。
+ */
+export function table(cols: string[], rows: Child[][], emptyText: string, opts: { onRow?: (i: number) => void; rowAttrs?: (i: number) => Record<string, any>; page?: { size: number; more: (left: number) => string; note?: string } } = {}): HTMLElement {
   const thead = h('thead', {}, h('tr', {}, ...cols.map((c) => h('th', {}, c))));
   const tbody = h('tbody');
-  rows.forEach((r, i) => {
-    const tr = h('tr', { ...(opts.rowAttrs?.(i) || {}) }, ...r.map((c) => h('td', {}, c)));
+  const addRow = (r: Child[], i: number) => {
+    const tr = h('tr', { ...(opts.rowAttrs?.(i) || {}) }, ...r.map((c) => h('td', typeof c === 'string' && c.length <= 28 ? { class: 'td-nw' } : {}, c))); // 短文字（时间、金额）不换行
     if (opts.onRow) { tr.tabIndex = 0; tr.addEventListener('click', () => opts.onRow!(i)); tr.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Enter') opts.onRow!(i); }); }
     else tr.classList.add('no-hover');
     tbody.append(tr);
-  });
+  };
   if (!rows.length) tbody.append(h('tr', { class: 'no-hover' }, h('td', { class: 'muted empty-cell', colSpan: cols.length }, emptyText)));
-  return h('div', { class: 'table-scroll' }, h('table', { class: 'data-table v6-table' }, thead, tbody));
+  const box = h('div', { class: 'table-scroll' }, h('table', { class: 'data-table v6-table' }, thead, tbody));
+  const pg = opts.page;
+  if (!pg) { rows.forEach(addRow); return box; }
+  let shown = 0;
+  const more = h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-more': '' }) as HTMLButtonElement;
+  const step = () => {
+    rows.slice(shown, shown + pg.size).forEach((r, k) => addRow(r, shown + k));
+    shown = Math.min(rows.length, shown + pg.size);
+    more.hidden = shown >= rows.length; more.textContent = pg.more(rows.length - shown);
+  };
+  more.addEventListener('click', step);
+  step();
+  return h('div', { class: 'stack-sm' }, box, h('div', { class: 'table-foot' }, more, pg.note ? h('span', { class: 'hint muted' }, pg.note) : null));
 }
 
 export const status = (cls: string, text: string) => h('span', { class: `status st-${cls}` }, text);
@@ -53,6 +69,8 @@ export function makeDialog(root: ParentNode, prefix: string) {
   const title = root.querySelector<HTMLElement>(`[data-${prefix}dialog-title]`)!;
   const body = root.querySelector<HTMLElement>(`[data-${prefix}dialog-body]`)!;
   const ok = root.querySelector<HTMLButtonElement>(`[data-${prefix}dialog-ok]`)!;
+  const cancel = form.querySelector<HTMLButtonElement>('button[value="cancel"]');
+  const cancelText = cancel?.textContent || '';
   let handler: (() => boolean | void | Promise<boolean | void>) | null = null;
   form.addEventListener('submit', async (e) => {
     const sub = (e as SubmitEvent).submitter as HTMLButtonElement | null;
@@ -64,6 +82,8 @@ export function makeDialog(root: ParentNode, prefix: string) {
   return (t: string, content: Node, okText: string, onOk: typeof handler, danger = false, hideOk = false) => {
     title.textContent = t; body.replaceChildren(content);
     ok.textContent = okText; ok.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`; ok.hidden = hideOk;
+    // 只看信息的弹窗（hideOk）：只留一个按钮，文字用 okText（例如"关闭"），不再出现意思重复的"取消"和"确定"
+    if (cancel) cancel.textContent = hideOk ? okText : cancelText;
     handler = onOk; dlg.showModal();
   };
 }

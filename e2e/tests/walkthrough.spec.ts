@@ -6,6 +6,7 @@ import { readJsonl, decodeQP, MAILS, KYB_ENV, PAY_ENV, TMP } from '../stack.mjs'
 import { totpCode, totpStep } from '../../lead-api/src/kyb/totp.js';
 
 // 页面走查（agents 规则建议 C42 到 C45）：逐页、逐状态截图，并自动检查常见的显示问题。
+// 注意：8094 端口用的是 site/dist，运行前先 `cd site && npm run build`，否则截到的是旧页面。
 // 不属于日常测试，只在 WALKTHROUGH=1 时运行：  WALKTHROUGH=1 npx playwright test tests/walkthrough.spec.ts
 // 截图和检查结果放在 WALKTHROUGH_OUT（默认 e2e/.tmp/walkthrough/）。
 // 状态：空（新商户）→ 有数据（很多条、大额、小额、灰尘）→ 慢（接口延迟 25 秒）→ 出错（接口返回 500）；桌面 1280 和手机 390。
@@ -37,25 +38,36 @@ const consoleErrors: Record<string, string[]> = {};
 function watch(page: Page, who: string) {
   consoleErrors[who] = [];
   page.on('console', (m) => { if (m.type() === 'error') consoleErrors[who].push(m.text().slice(0, 200)); });
-  page.on('pageerror', (e) => consoleErrors[who].push(`pageerror: ${String(e).slice(0, 200)}`));
+  page.on('pageerror', (e) => consoleErrors[who].push(`pageerror: ${String(e).slice(0, 200)} @ ${page.url()} ${(e.stack || '').split('\n').slice(1, 3).join(' ')}`));
 }
 async function shot(page: Page, name: string) {
   const file = `${name}.png`;
   await page.screenshot({ path: resolve(OUT, file), fullPage: true });
   const r = await page.evaluate(() => {
-    const text = document.body.innerText;
+    const clone = document.body.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('pre, code, script, style').forEach((e) => e.remove()); // 文档里的示例代码可以有 undefined
+    const text = clone.innerText || clone.textContent || '';
     const bad = ['NaN', 'undefined', 'Invalid Date', '[object Object]', 'null USDT', 'Infinity'].filter((w) => text.includes(w));
     const huge = (text.match(/\d{1,3}(,\d{3}){3,}\.\d{2}/g) || []).slice(0, 3); // 10 亿以上的金额，大概率是没转换
     const overflow = document.documentElement.scrollWidth > window.innerWidth + 1;
     const emptyBadges = [...document.querySelectorAll<HTMLElement>('.badge')].filter((b) => b.offsetParent && !b.textContent!.trim()).length;
-    const offscreen = [...document.querySelectorAll<HTMLElement>('button, a, input, select')].filter((e) => { const b = e.getBoundingClientRect(); return e.offsetParent && b.width > 0 && (b.right > window.innerWidth + 1 || b.left < -1); }).length;
-    return { bad, huge, overflow, emptyBadges, offscreen };
+    const inScroller = (e: Element) => { for (let x = e.parentElement; x; x = x.parentElement) { const o = getComputedStyle(x).overflowX; if ((o === 'auto' || o === 'scroll') && x.scrollWidth > x.clientWidth + 1) return true; } return false; };
+    // 横向滚动的导航和表格在手机上是有意的，不算"超出屏幕"
+    const offscreen = [...document.querySelectorAll<HTMLElement>('button, a, input, select')].filter((e) => { const b = e.getBoundingClientRect(); return e.offsetParent && b.width > 0 && (b.right > window.innerWidth + 1 || b.left < -1) && !inScroller(e); }).length;
+    // 桌面宽度下表格还要横向滚动才能看全（例如最后一列的按钮被挡住）
+    const wideTables = window.innerWidth >= 1000 ? [...document.querySelectorAll<HTMLElement>('.table-scroll')].filter((x) => x.offsetParent && x.scrollWidth > x.clientWidth + 1).length : 0;
+    // 当前显示的页面（后台的一个标签）是空白的：接口慢或出错时应该显示"加载中"或原因
+    const panel = [...document.querySelectorAll<HTMLElement>('[data-panel], [data-mpanel]')].find((x) => x.offsetParent);
+    const blank = !!panel && !panel.innerText.trim();
+    return { bad, huge, overflow, emptyBadges, offscreen, wideTables, blank };
   });
   for (const w of r.bad) findings.push({ shot: file, issue: `页面文字里有 "${w}"` });
   for (const x of r.huge) findings.push({ shot: file, issue: `异常大的金额 ${x}` });
   if (r.overflow) findings.push({ shot: file, issue: '页面横向溢出' });
   if (r.emptyBadges) findings.push({ shot: file, issue: `${r.emptyBadges} 个空的数字圆圈` });
   if (r.offscreen) findings.push({ shot: file, issue: `${r.offscreen} 个按钮或输入框超出屏幕` });
+  if (r.blank) findings.push({ shot: file, issue: '页面空白（没有内容，也没有"加载中"或出错原因）' });
+  if (r.wideTables) findings.push({ shot: file, issue: `${r.wideTables} 个表格在桌面上要横向滚动才能看全` });
 }
 async function adminTab(page: Page, tab: string) { await page.click(`[data-tab="${tab}"]`); await page.waitForTimeout(600); }
 async function merchantTab(page: Page, tab: string) { await page.click(`[data-mtab="${tab}"]`); await page.waitForTimeout(600); }
