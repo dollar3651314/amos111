@@ -6,7 +6,7 @@ import { createRawSender } from '../lead-api/src/mailer.js';
 import { deriveKeys } from '../lead-api/src/kyb/crypto.js';
 import { createRepo } from '../lead-api/src/kyb/repo.js';
 import { createPayDeps } from '../lead-api/src/pay/deps.js';
-import { approvedFromKyb } from '../lead-api/src/pay/kyb-link.js';
+import { approvedFromKyb, pendingKybCount } from '../lead-api/src/pay/kyb-link.js';
 import { json } from '../lead-api/src/kyb/http.js';
 
 let deps;
@@ -21,7 +21,7 @@ export function payDeps() {
     // 邮件里的链接：生产用正式地址，测试环境用 staging 分支的地址
     const host = config.appEnv === 'production' ? process.env.VERCEL_PROJECT_PRODUCTION_URL : process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL;
     return createPayDeps({
-      config, kyb: { redis, keys: kybKeys, listApproved: approvedFromKyb(repo) }, send: createRawSender(config),
+      config, kyb: { redis, keys: kybKeys, listApproved: approvedFromKyb(repo), pendingKyb: pendingKybCount(repo) }, send: createRawSender(config),
       getIp: (req) => ipAddress(req) || req.headers.get('x-forwarded-for')?.split(',')[0].trim() || '',
       origin: host ? `https://${host}` : '',
     });
