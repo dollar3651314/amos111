@@ -9,7 +9,7 @@ const INT8 = 20;
 export async function createPgDb(url) {
   const { default: postgres } = await import('postgres');
   const sql = postgres(url, {
-    prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10,
+    prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10, onnotice: () => {},
     types: { bigint: { to: INT8, from: [INT8], serialize: (x) => String(x), parse: (x) => Number(x) } },
   });
   const wrap = (s) => ({ query: async (text, params = []) => [...(await s.unsafe(text, params))] });
