@@ -170,7 +170,7 @@ export function createMerchantApi({ db, keys, ops, send, now = () => Date.now() 
     throw new PayError('invalid_param', 422, 'type');
   }
 
-  return async function handle(request) {
+  const handle = async function handle(request) {
     try {
       const url = new URL(request.url);
       const a = url.searchParams.get('a') || '';
@@ -197,4 +197,6 @@ export function createMerchantApi({ db, keys, ops, send, now = () => Date.now() 
       return errorResponse(e);
     }
   };
+  handle.actions = [...Object.keys(open), ...Object.keys(authed), 'export']; // 项目索引的测试用：检查每个动作都写进了《项目索引》
+  return handle;
 }
