@@ -53,6 +53,9 @@ check "付款页面 /pay/<订单号>/ 返回 200（改写规则生效）" "[ \"\
 # 收付款接口初始化失败时返回 503 和原因代码（不含配置值），输出出来方便排查
 echo "  收付款接口的返回：$(curl -s --max-time 15 "${H[@]}" "$BASE/api/merchant/?a=overview")"
 echo "  开放 API 的返回：$(curl -s --max-time 15 "${H[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/api/v1/balance/") $(curl -s --max-time 15 "${H[@]}" "$BASE/api/v1/balance/" | head -c 200)"
+for u in '/api/v1/?p=balance/' '/api/v1?p=balance/' '/api/v1/' '/api/v1' '/api/v1/balance/' '/api/v1/balance'; do
+  echo "  诊断 $u → $(curl -s --max-time 15 "${H[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE$u")"
+done
 echo "  链上监控：$(curl -s --max-time 15 "${H[@]}" "$BASE/api/tick/?health=1")"
 check "开放 API：没有签名返回 401" "[ \"\$(code '$BASE/api/v1/balance/')\" = 401 ]"
 check "商户后台接口：未登录返回 401" "[ \"\$(code '$BASE/api/merchant/?a=overview')\" = 401 ]"
