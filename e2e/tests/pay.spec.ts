@@ -217,6 +217,31 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     expect(rows[0].status).toBe('done');
   });
 
+  test('TC-P08 所有弹窗：在弹窗上滚动鼠标滚轮，背景页面不跟着滚动（BUG-P8）', async () => {
+    for (const [page, path] of [[admin, '/admin/'], [merchant, '/merchant/']] as const) {
+      await page.goto(path);
+      const dialogs = await page.locator('dialog').count();
+      expect(dialogs).toBeGreaterThan(0);
+      for (let i = 0; i < dialogs; i++) {
+        await page.evaluate((i) => {
+          document.body.style.minHeight = '5000px'; // 保证背景页面可以滚动
+          window.scrollTo({ top: 100, behavior: 'instant' }); // 页面开启了平滑滚动，这里要立即到位
+          const d = document.querySelectorAll('dialog')[i] as HTMLDialogElement;
+          d.style.minHeight = '200px';
+          d.showModal();
+        }, i);
+        const before = await page.evaluate(() => window.scrollY);
+        const box = (await page.locator('dialog').nth(i).boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        for (let k = 0; k < 5; k++) await page.mouse.wheel(0, 800);
+        await page.waitForTimeout(200);
+        const after = await page.evaluate(() => window.scrollY);
+        expect(after, `${path} 第 ${i + 1} 个弹窗`).toBe(before);
+        await page.evaluate((i) => { (document.querySelectorAll('dialog')[i] as HTMLDialogElement).close(); document.body.style.minHeight = ''; }, i);
+      }
+    }
+  });
+
   test('TC-P07 安全：数据库和服务器日志里没有助记词和私钥（AC-P11 ①）', async () => {
     const dump = await (await admin.request.post(`${B}/__fake/sql/`, { data: { sql: `select string_agg(t::text, ' ') s from (
       select row_to_json(x)::text t from pay_meta x union all select row_to_json(x)::text from sign_batches x union all select row_to_json(x)::text from pay_audit x
