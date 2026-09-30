@@ -6,6 +6,8 @@ import { langStaticPaths, type Lang } from '../../lib/i18n';
 import signNode from '../../docs/sign-request.mjs?raw';
 import signPy from '../../docs/sign_request.py?raw';
 import cbVerify from '../../docs/verify-callback.mjs?raw';
+// 接口的字段说明：lead-api/test/docs-reference.test.js 逐个调用接口，检查实际返回的字段和这份说明一致
+import { ENDPOINTS, OBJECTS, EVENTS, EVENT_ENVELOPE, ERRORS, TYPES, returnFields } from '../../docs/api-reference.mjs';
 export const getStaticPaths = langStaticPaths;
 const { lang } = Astro.props as { lang: Lang };
 const en = lang === 'en';
@@ -15,23 +17,13 @@ const T = (e: string, z: string) => (en ? e : z);
 
 const toc = [
   ['overview', T('Overview', '概览')], ['auth', T('Authentication', '请求签名')], ['orders', T('Orders', '订单收款')], ['customers', T('Customers', '客户')], ['matching', T('Matching rules', '匹配规则')],
-  ['balance', T('Balance & ledger', '余额与账本')], ['withdrawals', T('Withdrawals', '提币')], ['callbacks', T('Callbacks', '回调')], ['errors', T('Errors', '错误码')], ['sandbox', T('Sandbox', '沙箱')],
+  ['balance', T('Balance & ledger', '余额与账本')], ['withdrawals', T('Withdrawals', '提币')], ['callbacks', T('Callbacks', '回调')], ['reference', T('API reference', '接口详情')], ['errors', T('Errors', '错误码')], ['sandbox', T('Sandbox', '沙箱')],
 ];
-const endpoints: [string, string, string][] = [
-  ['POST', 'orders/', T('Create an order', '创建订单')], ['GET', 'orders/?order_no=…', T('Get an order (or ?merchant_order_no=…)', '查询订单（也可以用 ?merchant_order_no=…）')], ['GET', 'orders/list/?status=…&cursor=…', T('List orders', '订单列表')],
-  ['POST', 'orders/match/', T('Manually match an unmatched deposit to an order (same customer)', '把未匹配的到账手动匹配到订单（同一个客户）')], ['POST', 'orders/unmatch/', T('Remove a deposit from an order', '解除到账和订单的匹配')],
-  ['POST', 'customers/', T('Create or update a customer; returns its permanent address', '新建或更新客户，返回客户的永久地址')], ['GET', 'customers/?customer_id=…', T('Get a customer', '查询客户')],
-  ['GET', 'customers/list/?cursor=…', T('List customers', '客户列表')], ['GET', 'customers/stats/?customer_id=…&from=…&to=…', T('Totals for a customer in a period', '客户在某个时间段的统计')],
-  ['GET', 'balance/', T('Available and frozen balance', '可用余额和冻结余额')], ['GET', 'ledger/?cursor=…', T('Ledger entries', '账本明细')], ['GET', 'deposits/?customer_id=…&matched=false&cursor=…', T('Deposits (filter by customer or unmatched)', '到账明细（可以按客户、未匹配筛选）')],
-  ['POST', 'withdrawals/', T('Request a withdrawal (IP whitelist required)', '发起提币（需要 IP 白名单）')], ['GET', 'withdrawals/?withdrawal_no=…', T('Get a withdrawal', '查询提币')], ['POST', 'withdrawals/cancel/', T('Cancel a pending withdrawal', '取消待审核的提币')],
-];
-const errors: [string, string, string][] = [
-  ['401', 'invalid_signature', T('Missing or wrong signature', '没有签名或签名错误')], ['401', 'timestamp_expired', T('Timestamp more than 5 minutes from server time', '时间戳和服务器相差超过 5 分钟')],
-  ['403', 'ip_not_allowed', T('Withdrawal request not from a whitelisted IP (or no whitelist set)', '提币请求不是来自白名单 IP（或没有设置白名单）')], ['403', 'merchant_disabled', T('Account disabled', '账户已停用')],
-  ['404', 'not_found', T('No such object in your account', '你的账户里没有这条记录')], ['409', 'duplicate_merchant_order_no', T('merchant_order_no already used', '商户订单号已经存在')],
-  ['409', 'idempotency_conflict', T('Same Idempotency-Key with a different body', '同一个 Idempotency-Key 用在了不同的请求内容上')], ['422', 'invalid_param', T('A parameter is missing or invalid; see error.field', '参数缺失或格式错误，见 error.field')],
-  ['403', 'order_mode_disabled', T('Order mode is not enabled for your account', '你的账户没有开启订单模式')], ['422', 'insufficient_balance', T('Amount + fee exceeds available balance', '金额加手续费超过了可用余额')], ['429', 'rate_limited', T('Too many requests; retry later', '请求太频繁，请稍后重试')],
-];
+const L = (x: [string, string]) => (en ? x[0] : x[1]);
+const anchor = (e: { method: string; path: string }) => `ep-${e.method.toLowerCase()}-${e.path.replace(/\W+/g, '-').replace(/-+$/, '')}`;
+type Field = [string, string, [string, string], boolean?];
+const fieldRows = (fields: Field[]) => fields.map(([n, t, d, nullable]) => ({ n, t: L(TYPES[t as keyof typeof TYPES] || [t, t]), d: L(d), nullable: !!nullable }));
+const nullNote = T('may be null', '可能为 null');
 const orderReq = `POST /api/v1/orders/
 {
   "customer_id": "user_88213",          // required: your own ID for this customer
@@ -50,13 +42,20 @@ const orderRes = `{
   "network": "TRON",
   "token": "USDT",
   "status": "pending",
-  "expires_at": "2026-09-29T09:30:00Z",
+  "created_at": "2026-09-29T09:00:00.000Z",
+  "expires_at": "2026-09-29T09:30:00.000Z",
+  "deposits": [],
   "pay_url": "https://{BASE_URL}/pay/ORD-20260929-0413/"
 }`;
 const addrReq = `POST /api/v1/customers/
 { "customer_id": "user_88213", "name": "Lin Trading", "email": "lin@lintrading.example" }
 
-→ { "customer_id": "user_88213", "address": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe", "created_at": "2026-09-11T02:10:00Z" }`;
+→ {
+  "customer_id": "user_88213", "name": "Lin Trading", "email": "lin@lintrading.example", "remark": "",
+  "address": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe",
+  "total": "0.00", "count": 0, "fees": "0.00", "unmatched": "0.00",
+  "last_payment_at": null, "created_at": "2026-09-11T02:10:00.000Z"
+}`;
 const wdReq = `POST /api/v1/withdrawals/
 {
   "kind": "payout",              // "payout" = to your customer, "cashout" = to your registered wallet
@@ -66,7 +65,12 @@ const wdReq = `POST /api/v1/withdrawals/
   "merchant_ref": "PAYOUT-7781"
 }
 
-→ { "withdrawal_no": "WD-0032", "status": "pending", "amount": "1000.00", "fee": "2.00", "frozen": "1002.00" }`;
+→ {
+  "withdrawal_no": "WD-20260929-7F3A21", "kind": "payout", "customer_id": "user_88213",
+  "to": "TXk8fQ2m9sR7ZcY1hN4vB6pW3aLd5Z3wQe", "amount": "1000.00", "fee": "2.00",   // 1002.00 is frozen
+  "status": "pending", "txid": null, "reason": null, "merchant_ref": "PAYOUT-7781", "source": "api",
+  "created_at": "2026-09-29T09:12:00.000Z"
+}`;
 const cbBody = `POST https://your-server.example/callback
 X-QC-Timestamp: 1790665800
 X-QC-Signature: 5f1c…
@@ -82,7 +86,9 @@ X-QC-Signature: 5f1c…
     "status": "completed",       // pending | partial | completed | overpaid | expired | expired_partial
     "amount": "500.00",
     "matched": "500.00",
-    "deposits": [{ "txid": "a3c1…", "amount": "500.00", "matched_by": "deposit" }],   // deposit | order | manual
+    "created_at": "2026-09-29T09:05:00.000Z",
+    "expires_at": "2026-09-29T09:35:00.000Z",
+    "deposits": [{ "id": "1042", "txid": "a3c1…", "amount": "500.00", "matched_by": "deposit", "time": "2026-09-29T09:10:00.000Z" }],
     "manual": false
   }
 }`;
@@ -94,7 +100,7 @@ X-QC-Signature: 5f1c…
     </nav>
     <article class="docs-body">
       <h1>{T('Quick Come API', 'Quick Come 开放 API')}</h1>
-      <p class="muted">{T('Version 1 · Draft for the v6 prototype. Paths, fields and examples may still change before release.', '第 1 版 · v6 原型阶段的草案，正式发布前路径、字段和示例可能还会调整。')}</p>
+      <p class="muted">{T('Version 1. Every field in the API reference is checked automatically against the implementation, so the reference and the API cannot drift apart.', '第 1 版。"接口详情"里的每个字段都由自动测试和实际接口逐一核对，文档和接口不会不一致。')}</p>
 
       <h2 id="overview">{T('Overview', '概览')}</h2>
       <ul>
@@ -106,7 +112,7 @@ X-QC-Signature: 5f1c…
       </ul>
       <div class="table-scroll"><table class="data-table">
         <thead><tr><th>{T('Endpoint', '接口')}</th><th>{T('Purpose', '用途')}</th></tr></thead>
-        <tbody>{endpoints.map(([m, p, d]) => <tr><td><span class={`method ${m === 'POST' ? 'post' : ''}`}>{m}</span><code>{p}</code></td><td>{d}</td></tr>)}</tbody>
+        <tbody>{ENDPOINTS.map((e) => <tr><td><span class={`method ${e.method === 'POST' ? 'post' : ''}`}>{e.method}</span><a href={`#${anchor(e)}`}><code>{e.path}</code></a></td><td>{L(e.title as [string, string])}</td></tr>)}</tbody>
       </table></div>
 
       <h2 id="auth">{T('Authentication', '请求签名')}</h2>
@@ -117,7 +123,7 @@ X-QC-Signature: 5f1c…
           <tr><td><code>X-QC-Key</code></td><td>{T('Your API Key', '你的 API Key')}</td></tr>
           <tr><td><code>X-QC-Timestamp</code></td><td>{T('Unix time in seconds; must be within 5 minutes of server time', 'Unix 时间戳（秒），和服务器时间相差不能超过 5 分钟')}</td></tr>
           <tr><td><code>X-QC-Signature</code></td><td>{T('hex( HMAC-SHA256( Secret, timestamp + "\\n" + METHOD + "\\n" + path_and_query + "\\n" + hex(SHA-256(body)) ) ) — use an empty body for GET', 'hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 请求方法 + "\\n" + 路径和查询参数 + "\\n" + hex(SHA-256(请求体)) ) )；GET 请求的请求体为空')}</td></tr>
-          <tr><td><code>Idempotency-Key</code></td><td>{T('Recommended on POST. Retrying with the same key returns the first result instead of creating a duplicate (kept 24 hours).', 'POST 请求建议带上。用同一个 Key 重试，会返回第一次的结果，不会重复创建（保留 24 小时）。')}</td></tr>
+          <tr><td><code>Idempotency-Key</code></td><td>{T('Required on every POST (8–128 characters: letters, digits and _ . : -; a UUID works). Retrying with the same key and body returns the first result instead of creating a duplicate (kept 24 hours). A request that failed does not use up the key.', '每个 POST 请求都必须带上（8 到 128 位，可用字母、数字和 _ . : -，用 UUID 即可）。用同一个 Key 和同样的内容重试，会返回第一次的结果，不会重复创建（保留 24 小时）。失败的请求不占用这个 Key。')}</td></tr>
         </tbody>
       </table></div>
       <h3>Node.js</h3>
@@ -167,12 +173,57 @@ X-QC-Signature: 5f1c…
       <pre><code>{cbBody}</code></pre>
       <p>{T('Signature: hex( HMAC-SHA256( Secret, timestamp + "\\n" + raw_body ) ). Reply with any 2xx status. Otherwise we retry after 1 min, 5 min, 30 min, 2 h, 6 h, 12 h and 24 h, then stop; you can resend from the dashboard. The same event can arrive more than once: deduplicate by id.', '签名：hex( HMAC-SHA256( Secret, 时间戳 + "\\n" + 原始请求体 ) )。收到后请返回任意 2xx 状态码；否则我们在 1 分钟、5 分钟、30 分钟、2 小时、6 小时、12 小时、24 小时后重试，然后停止，你可以在商户后台手动重发。同一个事件可能收到不止一次，请按 id 去重。')}</p>
       <pre><code>{cbVerify}</code></pre>
+      <h3>{T('Callback body', '回调内容')}</h3>
+      <div class="table-scroll"><table class="data-table">
+        <thead><tr><th>{T('Field', '字段')}</th><th>{T('Type', '类型')}</th><th>{T('Description', '说明')}</th></tr></thead>
+        <tbody>{fieldRows(EVENT_ENVELOPE as Field[]).map((f) => <tr><td><code>{f.n}</code></td><td>{f.t}</td><td>{f.d}</td></tr>)}</tbody>
+      </table></div>
+      {EVENTS.map((ev) => (
+        <>
+          <h3><code>{ev.type}</code></h3>
+          <p>{L(ev.when as [string, string])}{T('. data fields:', '。data 的字段：')}</p>
+          <div class="table-scroll"><table class="data-table">
+            <thead><tr><th>{T('Field', '字段')}</th><th>{T('Type', '类型')}</th><th>{T('Description', '说明')}</th></tr></thead>
+            <tbody>{fieldRows([...ev.data.flatMap((n) => OBJECTS[n as keyof typeof OBJECTS]), ...((ev as any).extra || [])] as Field[]).map((f) => <tr><td><code>{f.n}</code></td><td>{f.t}</td><td>{f.d}{f.nullable ? `（${nullNote}）` : ''}</td></tr>)}</tbody>
+          </table></div>
+        </>
+      ))}
+
+      <h2 id="reference">{T('API reference', '接口详情')}</h2>
+      <p>{T('Amounts are decimal strings in USDT (e.g. "100.50"); times are ISO 8601 in UTC. Lists return { items, next_cursor }: pass next_cursor as cursor to get the next page.', '金额是 USDT 的字符串（例如 "100.50"），时间是 UTC 的 ISO 8601 格式。列表接口返回 { items, next_cursor }：把 next_cursor 作为 cursor 传入，取下一页。')}</p>
+      <h3>OrderDeposit</h3>
+      <p>{T('Used in the deposits array of an order.', '订单里 deposits 数组的每一项。')}</p>
+      <div class="table-scroll"><table class="data-table">
+        <thead><tr><th>{T('Field', '字段')}</th><th>{T('Type', '类型')}</th><th>{T('Description', '说明')}</th></tr></thead>
+        <tbody>{fieldRows(OBJECTS.OrderDeposit as Field[]).map((f) => <tr><td><code>{f.n}</code></td><td>{f.t}</td><td>{f.d}</td></tr>)}</tbody>
+      </table></div>
+      {ENDPOINTS.map((e: any) => (
+        <section class="ep" id={anchor(e)}>
+          <h3><span class={`method ${e.method === 'POST' ? 'post' : ''}`}>{e.method}</span><code>{`/api/v1/${e.path}`}</code> · {L(e.title)}</h3>
+          {e.note && <p>{L(e.note)}</p>}
+          {[['query', T('Query parameters', '查询参数')], ['body', T('Request body (JSON)', '请求体（JSON）')]].map(([k, label]) => e[k]?.length ? (
+            <>
+              <p class="ep-label">{label}</p>
+              <div class="table-scroll"><table class="data-table">
+                <thead><tr><th>{T('Field', '字段')}</th><th>{T('Type', '类型')}</th><th>{T('Required', '必填')}</th><th>{T('Description', '说明')}</th></tr></thead>
+                <tbody>{e[k].map(([n, t, req, d]: any) => <tr><td><code>{n}</code></td><td>{L(TYPES[t as keyof typeof TYPES])}</td><td>{req ? T('Yes', '是') : T('No', '否')}</td><td>{L(d)}</td></tr>)}</tbody>
+              </table></div>
+            </>
+          ) : null)}
+          <p class="ep-label">{e.list ? T('Response: { items, next_cursor }; each item:', '返回：{ items, next_cursor }，每一项的字段：') : T('Response', '返回')}</p>
+          <div class="table-scroll"><table class="data-table">
+            <thead><tr><th>{T('Field', '字段')}</th><th>{T('Type', '类型')}</th><th>{T('Description', '说明')}</th></tr></thead>
+            <tbody>{fieldRows(returnFields(e) as Field[]).map((f) => <tr><td><code>{f.n}</code></td><td>{f.t}</td><td>{f.d}{f.nullable ? `（${nullNote}）` : ''}</td></tr>)}</tbody>
+          </table></div>
+          {e.errors?.length ? <p class="ep-label">{T('Errors: ', '可能的错误：')}{e.errors.map((c: string, i: number) => <>{i ? '、' : ''}<code>{c}</code></>)}</p> : null}
+        </section>
+      ))}
 
       <h2 id="errors">{T('Errors', '错误码')}</h2>
       <p>{T('Errors return { "error": { "code": "…", "message": "…", "field": "…" } }.', '出错时返回 { "error": { "code": "…", "message": "…", "field": "…" } }。')}</p>
       <div class="table-scroll"><table class="data-table">
         <thead><tr><th>HTTP</th><th>code</th><th>{T('Meaning', '含义')}</th></tr></thead>
-        <tbody>{errors.map(([s, code, d]) => <tr><td>{s}</td><td><code>{code}</code></td><td>{d}</td></tr>)}</tbody>
+        <tbody>{ERRORS.map(([s, code, d]) => <tr><td>{s}</td><td><code>{code}</code></td><td>{L(d as [string, string])}</td></tr>)}</tbody>
       </table></div>
 
       <h2 id="sandbox">{T('Sandbox', '沙箱')}</h2>

@@ -99,7 +99,7 @@ export function createApiV1({ db, keys, ops, getIp = () => '', now = () => Date.
     'POST withdrawals/cancel': (m, q, b) => ops.cancelWithdrawal(m, b.withdrawal_no),
   };
 
-  return async function handle(request) {
+  const handle = async function handle(request) {
     try {
       const path = canonicalPath(request.url).split('?')[0].replace(/^\/api\/v1\/?/, '').replace(/\/+$/, '');
       const route = routes[`${request.method} ${path}`];
@@ -115,4 +115,6 @@ export function createApiV1({ db, keys, ops, getIp = () => '', now = () => Date.
       return json(200, money(out));
     } catch (e) { return errorResponse(e); }
   };
+  handle.routes = Object.keys(routes); // 开发者文档的测试用：检查每个接口都写进了文档
+  return handle;
 }

@@ -52,6 +52,8 @@ test('回调：带签名；失败按 1 分钟、5 分钟……重试；24 小时
   const h = got[0].init.headers;
   assert.equal(h['X-QC-Signature'], signCallback('s3cret', h['X-QC-Timestamp'], got[0].init.body));
   assert.equal(JSON.parse(got[0].init.body).type, 'deposit');
+  // 回调里的金额是字符串，和开放 API 一致（BUG-P9）
+  assert.equal(JSON.parse(got[0].init.body).data.amount, '20.00');
   let [cb] = await db.query('select * from callbacks');
   assert.equal(cb.attempts, 1);
   assert.ok(Math.abs(new Date(cb.next_at) - Date.now() - RETRY_MIN[0] * 60_000) < 5000);

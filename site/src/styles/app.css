@@ -275,6 +275,11 @@ dialog[data-mdialog]::backdrop, dialog[data-pdialog]::backdrop { background: rgb
 .docs-body :not(pre) > code { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; font-size: 0.86em; }
 .docs-body .data-table td, .docs-body .data-table th { vertical-align: top; }
 .docs-body .data-table tbody tr:hover { background: transparent; cursor: default; }
+.docs-body .ep { scroll-margin-top: 16px; }
+.docs-body .ep h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.docs-body .ep-label { font-weight: 600; margin: 12px 0 6px; }
+.docs-body .data-table td:not(:last-child), .docs-body .data-table th:not(:last-child) { white-space: nowrap; }
+.docs-body .data-table td:last-child { min-width: 14em; } /* 手机上说明列不被挤成一个字一行，表格在框内横向滚动 */
 .method { display: inline-block; font-size: 0.72rem; font-weight: 800; border-radius: 4px; padding: 1px 6px; margin-right: 6px; color: #fff; background: #1c7ed6; }
 .method.post { background: var(--emerald-strong); }
 @media (max-width: 860px) { .docs { grid-template-columns: 1fr; } .docs-toc { position: static; grid-auto-flow: column; overflow-x: auto; gap: 14px; } }

@@ -3,6 +3,7 @@
 import { createHmac } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { money } from './common.js';
 
 /** 第 1 次立即发送；失败后分别在 1 分钟、5 分钟、30 分钟、2 小时、6 小时、12 小时、24 小时后重试，然后停止 */
 export const RETRY_MIN = [1, 5, 30, 120, 360, 720, 1440];
@@ -41,7 +42,8 @@ export async function deliverDue(db, { getTarget, fetchImpl = fetch, resolve, no
     const target = await getTarget(cb.merchant_id);
     let code = null, good = false;
     if (target?.url && target.secret && !(await checkCallbackUrl(target.url, resolve))) {
-      const body = JSON.stringify(cb.payload);
+      // 金额和开放 API 的返回一样用字符串（例如 "500.00"）；数据库里存的是整数（0.000001 USDT）（BUG-P9）
+      const body = JSON.stringify(money(cb.payload));
       const ts = String(Math.floor(now.getTime() / 1000));
       try {
         const res = await fetchImpl(target.url, {

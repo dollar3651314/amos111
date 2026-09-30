@@ -13,7 +13,7 @@ export function derivePayKeys(appSecret) {
 
 /** 对外的金额一律是字符串，例如 "100.50"（开发者文档） */
 export const amt = (u) => (u === null || u === undefined ? null : fmtUsdt(u).replace(/,/g, ''));
-const AMOUNT_KEYS = new Set(['amount', 'matched', 'fee', 'credited', 'available', 'frozen', 'total', 'fees', 'unmatched', 'balance', 'available_after', 'frozen_after']);
+const AMOUNT_KEYS = new Set(['amount', 'matched', 'fee', 'credited', 'available', 'frozen', 'total', 'fees', 'unmatched', 'balance', 'available_after', 'frozen_after', 'payouts']);
 /** 把对象里的金额字段（整数）转成字符串 */
 export function money(v) {
   if (Array.isArray(v)) return v.map(money);
