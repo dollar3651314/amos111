@@ -20,4 +20,6 @@ if (onlyEn.length || onlyZh.length) {
 const ob = JSON.parse(readFileSync(new URL('../src/i18n/onboarding.json', import.meta.url), 'utf8'));
 const obEn = shape(ob.en).join('|'), obZh = shape(ob.zh).join('|');
 if (obEn !== obZh) { console.error('onboarding.json: en/zh shape mismatch'); process.exit(1); }
+const mc = JSON.parse(readFileSync(new URL('../src/i18n/merchant.json', import.meta.url), 'utf8'));
+if (shape(mc.en).join('|') !== shape(mc.zh).join('|')) { console.error('merchant.json: en/zh shape mismatch'); process.exit(1); }
 console.log('i18n check OK');

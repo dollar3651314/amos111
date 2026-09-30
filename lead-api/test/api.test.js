@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Vercel 函数入口：没有配置存储时，接口返回 500、健康检查返回 503，并且不会泄露配置值
 test('api/leads 和 api/health：没有配置存储时安全失败', async () => {
-  for (const k of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'APP_SECRET', 'BLOB_READ_WRITE_TOKEN', 'BLOB_STORE_ID', 'CRON_SECRET', 'SMTP_HOST', 'RESEND_API_KEY', 'MAIL_FROM', 'MAIL_TO']) delete process.env[k];
+  for (const k of ['DATABASE_URL', 'TICK_SECRET', 'TRONGRID_API_KEY', 'TRON_NETWORK', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'APP_SECRET', 'BLOB_READ_WRITE_TOKEN', 'BLOB_STORE_ID', 'CRON_SECRET', 'SMTP_HOST', 'RESEND_API_KEY', 'MAIL_FROM', 'MAIL_TO']) delete process.env[k];
   const origError = console.error;
   console.error = () => {};
   try {
@@ -14,7 +14,16 @@ test('api/leads 和 api/health：没有配置存储时安全失败', async () =>
     const { GET } = await import('../../api/health.js');
     const h = GET();
     assert.equal(h.status, 503);
-    assert.deepEqual(await h.json(), { ok: false, env: 'local', commit: '', storage: false, mail: false, mailMode: 'none', secret: false, blob: false, blobUpload: false, cron: false });
+    assert.deepEqual(await h.json(), { ok: false, env: 'local', commit: '', storage: false, mail: false, mailMode: 'none', secret: false, blob: false, blobUpload: false, cron: false, pay: { db: false, tron: 'mainnet', trongridKey: false, tick: false } });
+    // v6：收付款接口在没有配置数据库时返回 503，不泄露任何信息
+    for (const f of ['v1', 'merchant', 'pay', 'wallet']) {
+      const mod = await import(`../../api/${f}.js`);
+      const r3 = await mod.GET(new Request(`http://x/api/${f}/?a=me`));
+      assert.equal(r3.status, 503, f);
+      assert.deepEqual(await r3.json(), { error: { code: 'not_configured' } });
+    }
+    const tk = await import('../../api/tick.js');
+    assert.equal((await tk.GET(new Request('http://x/api/tick/'))).status, 401);
     // v3：开户接口在没有配置时返回 503，不泄露任何信息
     const ob = await import('../../api/kyb.js');
     const r2 = await ob.GET(new Request('http://x/api/kyb/?g=onboarding&a=state'));
@@ -41,6 +50,12 @@ test('接口入口：Vercel 函数不超过 12 个，没有 [xxx].js 动态文�
   // 同一个入口按 g 参数分发；g 不对时返回 404；没有配置时安全返回 503
   const { GET } = await import('../../api/kyb.js');
   assert.equal((await GET(new Request('https://x.test/api/kyb/?g=admin&a=me'))).status, 503);
+});
+
+test('健康检查：文件存储令牌的格式不对时 blobUpload 为 false（BUG-P6）', async () => {
+  const { loadConfig } = await import('../src/config.js');
+  assert.equal(loadConfig({ BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_AbC123_secret' }).blobUploadToken, true);
+  for (const v of ['', 'abc', 'postgresql://x', 'vercel_blob_rw_']) assert.equal(loadConfig({ BLOB_READ_WRITE_TOKEN: v }).blobUploadToken, false, v);
 });
 
 test('测试环境：邮件标题带"[测试环境]"；健康检查返回 env，且不要求 CRON_SECRET（agents v0.6 C34）', async () => {

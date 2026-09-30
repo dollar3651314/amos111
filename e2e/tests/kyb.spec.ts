@@ -47,6 +47,7 @@ async function login(page: Page) {
   await page.fill('#a-otp', totpCode(totpSecret, Date.now()));
   await page.click('[data-login] button[type="submit"]');
   await expect(page.locator('[data-view="app"]')).toBeVisible();
+  await page.click('[data-tab="apps"]'); // v6：登录后默认打开"概览"，开户的用例从开户申请开始
 }
 async function confirmDialog(page: Page) {
   await page.click('[data-dialog-ok]');
@@ -248,8 +249,9 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await ctx.close();
 
     // Amos 收到通知，但通知里没有敏感信息
+    // 通知邮件在提交返回之后才异步发送（waitUntil）：等邮件到了再检查，不要马上读
+    await expect.poll(() => mailsTo('sales@quickcomepay.test').filter((m) => m.includes(ref)).length, { timeout: 10_000 }).toBeGreaterThan(0);
     const note = mailsTo('sales@quickcomepay.test').filter((m) => m.includes(ref)).at(-1)!;
-    expect(note).toBeTruthy();
     for (const s of ['C9876543', '5 Le Loi', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE']) expect(note).not.toContain(s);
   });
 
@@ -262,6 +264,7 @@ test.describe.serial('TC-K v3 在线开户', () => {
   test('TC-K06 AC-K9 后台查看完整资料、下载文件、查看签名', async () => {
     await admin.reload();
     await expect(admin.locator('[data-view="app"]')).toBeVisible();
+    await admin.click('[data-tab="apps"]'); // v6：登录后默认打开"概览"，这里切到开户申请
     await expect(admin.locator('[data-count="apps"]')).toHaveText('1'); // 1 个待审核
     await expect(admin.locator('[data-count="leads"]')).toHaveText(String(leadsBefore)); // 新线索已发送链接，未发送的数量不变
     const row = admin.locator(`[data-apps-body] tr[data-ref="${ref}"]`);
@@ -334,6 +337,8 @@ test.describe.serial('TC-K v3 在线开户', () => {
     await admin.getByRole('button', { name: '通过' }).click();
     await confirmDialog(admin);
     await expect(admin.locator('[data-toast]')).toContainText('已通过');
+    // 审核后导航上的"待审核"数字马上更新，不需要刷新页面（BUG-P7）
+    await expect(admin.locator('[data-count="apps"]')).toHaveText('0');
     await shot(admin, '后台详情-已通过');
     await expect(admin.locator('[data-side]')).toContainText('业务关系存续期间');
     await expect(admin.locator('.timeline-mini')).toContainText('补件');
