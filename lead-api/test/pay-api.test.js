@@ -115,4 +115,9 @@ test('vercel.json：改写到函数的目标地址以 / 结尾（trailingSlash �
   const v = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8'));
   assert.equal(v.trailingSlash, true);
   for (const r of v.rewrites) assert.match(r.destination.split('?')[0], /\/$/, r.destination);
+  // 改写到函数时不能用 :path* 这类命名参数：Vercel 生成的正则不接受结尾的 /（所有接口地址都以 / 结尾），
+  // 而且会把参数另外加进查询串，影响签名。用 (.*)，并用 `vercel build` 生成的路由表确认过
+  const v1 = v.rewrites.find((r) => r.source.startsWith('/api/v1/'));
+  assert.deepEqual(v1, { source: '/api/v1/(.*)', destination: '/api/v1/?p=$1' });
+  for (const u of ['/api/v1/balance/', '/api/v1/orders/ORD-1/']) assert.match(u, /^\/api\/v1(?:\/(.*))$/);
 });

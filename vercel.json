@@ -66,8 +66,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/v1/:path*",
-      "destination": "/api/v1/?p=:path*"
+      "source": "/api/v1/(.*)",
+      "destination": "/api/v1/?p=$1"
     },
     {
       "source": "/pay/:id/",
