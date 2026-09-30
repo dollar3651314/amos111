@@ -34,3 +34,21 @@ test('jsonb：修复之前多编码了一层的值；正常的字符串不动；
   assert.equal(await getMeta(db, 'b'), '456');
   await db.end();
 });
+
+test('数据库：同时发出很多查询时，最多 3 个同时进行，其余排队，全部都能返回（BUG-P22）', async () => {
+  const { gate } = await import('../src/pay/db.js');
+  const run = gate(3);
+  let active = 0, peak = 0;
+  const job = (i) => run(async () => { active++; peak = Math.max(peak, active); await new Promise((r) => setTimeout(r, 5)); active--; return i; });
+  const out = await Promise.all(Array.from({ length: 20 }, (_, i) => job(i)));
+  assert.deepEqual(out, Array.from({ length: 20 }, (_, i) => i));
+  assert.equal(peak, 3);
+  // 出错的任务不会卡住后面的
+  const r = await Promise.allSettled([run(async () => { throw new Error('x'); }), run(async () => 'ok')]);
+  assert.deepEqual(r.map((x) => x.status), ['rejected', 'fulfilled']);
+  // 真实数据库上同时发 30 个查询
+  const db = await createTestDb(); await migrate(db);
+  const rows = await Promise.all(Array.from({ length: 30 }, (_, i) => db.query('select $1::int v', [i])));
+  assert.deepEqual(rows.map((x) => x[0].v), Array.from({ length: 30 }, (_, i) => i));
+  await db.end();
+});

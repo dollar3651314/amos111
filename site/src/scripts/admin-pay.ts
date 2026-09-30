@@ -4,7 +4,7 @@
 // 签名页面的核对规则见《架构方案 v6》§2.4：页面显示的收款地址和金额来自浏览器对交易原文的解码，不是服务器发来的文字。
 import { calcFee, describeFee, fmtUsdt, parseUsdt, shortAddr, type FeeRule } from '../lib/money';
 import * as M from './v6-mock';
-import { renderOverview } from './admin-overview';
+import { mountOverview, type OverviewData } from './admin-overview';
 import { copyBtn, field, fieldErr, fmtTime, h, makeDialog, mono, stat, status, table, toast } from './ui';
 
 const root = document.getElementById('admin-root')!;
@@ -143,7 +143,7 @@ export const modeText = (m: M.OrderMode) => (m.enabled ? `${m.low / 10000}%–${
 render.overview = (p) => {
   const E = M.merchants.length === 0; // 空状态预览
   const z = (v: string) => (E ? '0.00' : v);
-  renderOverview(p, {
+  const all: OverviewData = {
     funds: { collected_total: z('486215.40'), deposit_count: E ? 0 : 1287, owed_total: z('58402.18'), owed_available: z('57400.18'), owed_frozen: z('1002.00'),
       assets_total: z('63971.62'), unswept_total: z('12480.30'), hot_usdt: z('41491.32'), cold_usdt: z('10000.00'), cold_configured: true,
       profit_total: z('5569.44'), profit_now: z('0.00'), profit_after_sweep: z('5569.44'), income_fee_in: z('4862.15'), income_fee_out: z('706.00'), income_dust: z('1.29') },
@@ -156,7 +156,10 @@ render.overview = (p) => {
     },
     top_merchants: E ? [] : M.merchants.slice(0, 5).map((m, i) => ({ name: m.name, amount: ['98210.00', '61200.50', '40100.25', '26008.00', '14600.00'][i], count: [260, 170, 110, 72, 40][i] })),
     system: { tick_age_s: 38, recon: E ? null : { day: new Date().toISOString().slice(0, 10), diff: '0.00', complete: true }, db_bytes: E ? 2_000_000 : 41_000_000, db_limit_bytes: 500 * 1024 * 1024 },
-  }, (tab) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click());
+  };
+  // 原型里模拟两批数据先后回来
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  mountOverview(p, { db: async () => { await wait(300); return all; }, chain: async () => { await wait(900); return {}; } }, (tab) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click());
 };
 render.merchants = (p) => {
   const pending = M.approvedApps.filter((a) => !M.merchants.some((m) => m.name === a.company));

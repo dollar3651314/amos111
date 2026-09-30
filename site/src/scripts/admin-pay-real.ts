@@ -13,7 +13,7 @@ import { decodeRaw } from '../../../lead-api/src/pay/txcodec.js';
 import { describeFee, fmtUsdt, parseUsdt, shortAddr } from '../lib/money';
 import { copyBtn, field, fieldErr, fmtTime, h, mono, stat, status, table, toast } from './ui';
 import { dialog, feeInputs, modeInputs, modeText, tronscan, minsAgo, TRONSCAN } from './admin-pay';
-import { renderOverview } from './admin-overview';
+import { mountOverview } from './admin-overview';
 
 const root = document.getElementById('admin-root')!;
 const PROTO = root.dataset.prototype === '1';
@@ -46,8 +46,6 @@ const render: Record<string, (p: HTMLElement) => Promise<void>> = {};
 async function show(tab: string) {
   const p = $(`[data-panel="${tab}"]`);
   try { await render[tab.slice(2)](p); } catch (e) {
-    // 收付款还没有配置（例如只用开户功能的环境）：概览退回"开户申请"
-    if (tab === 'p-overview' && (e as WErr).code === 'not_configured') { root.querySelector<HTMLElement>('[data-tab="apps"]')?.click(); return; }
     p.replaceChildren(toolbar(''), h('p', { class: 'alert' }, errText(e)));
   }
   counts();
@@ -149,8 +147,17 @@ function signDialog(job: SignJob) {
 
 // ============ 商户 ============
 render.overview = async (p) => {
-  const refresh = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => show('p-overview') }, '刷新');
-  renderOverview(p, await call('overview'), (tab) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click(), refresh);
+  const go = (tab: string) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click();
+  mountOverview(p, {
+    db: async () => {
+      try { return await call('overview'); } catch (e) {
+        // 收付款还没有配置（例如只用开户功能的环境）：概览退回"开户申请"
+        if ((e as WErr).code === 'not_configured') go('apps');
+        throw e;
+      }
+    },
+    chain: () => call('overview-chain'),
+  }, go);
 };
 render.merchants = async (p) => {
   const { merchants, pending } = await call('merchants');
