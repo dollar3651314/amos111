@@ -45,4 +45,15 @@ check "跨站请求返回 403" "[ \"\$(code -X POST -H 'content-type: applicatio
 check "未知接口分组返回 404" "[ \"\$(code '$BASE/api/kyb/?g=nope&a=me')\" = 404 ]"
 check "不存在的接口地址返回 404（BUG-K7 这类问题）" "[ \"\$(code '$BASE/api/admin/me/')\" = 404 ]"
 check "官网表单的非法提交被拒绝（400）" "[ \"\$(code -X POST -H 'content-type: application/json' -d '{}' '$BASE/api/leads/')\" = 400 ]"
+# v6 收付款
+check "健康检查：收付款的数据库已配置" "echo '$health' | grep -q '\"db\":true'"
+check "健康检查：连的是 Nile 测试网（不是主网）" "echo '$health' | grep -q '\"tron\":\"nile\"'"
+for p in /merchant/ /docs/ /zh/merchant/ /zh/docs/; do check "$p 返回 200" "[ \"\$(code '$BASE$p')\" = 200 ]"; done
+check "付款页面 /pay/<订单号>/ 返回 200（改写规则生效）" "[ \"\$(code '$BASE/pay/ORD-20260101-00000000/')\" = 200 ]"
+check "开放 API：没有签名返回 401" "[ \"\$(code '$BASE/api/v1/balance/')\" = 401 ]"
+check "商户后台接口：未登录返回 401" "[ \"\$(code '$BASE/api/merchant/?a=overview')\" = 401 ]"
+check "运营后台收付款接口：未登录返回 401" "[ \"\$(code '$BASE/api/wallet/?a=status')\" = 401 ]"
+check "每分钟任务：没有口令返回 401" "[ \"\$(code '$BASE/api/tick/')\" = 401 ]"
+check "付款查询：不存在的订单返回 404" "[ \"\$(code '$BASE/api/pay/?o=ORD-20260101-00000000')\" = 404 ]"
+check "链上监控 5 分钟内运行过" "[ \"\$(code '$BASE/api/tick/?health=1')\" = 200 ]"
 exit $fail

@@ -18,6 +18,9 @@ export const PROTO_DIST = resolve(TMP, 'proto-dist');
 // v5：测试环境（APP_ENV=staging）的构建，放在 8092 端口
 export const STAGING_DIST = resolve(TMP, 'staging-dist');
 export const DATA_STG = resolve(TMP, 'data-staging');
+// v6：收付款端到端测试用的实例（独立的数据和后台账号；内嵌 Postgres + TronGrid 替身），放在 8094 端口
+export const DATA_PAY = resolve(TMP, 'data-pay');
+export const PAY_ENV = { TICK_SECRET: 'e2e-tick-secret', FAKE_TRON: '1', FAKE_SQL: '1' };
 // v3 开户（KYB）测试用的密钥：只用于本地测试
 export const KYB_ENV = { APP_SECRET: 'e2e-app-secret-e2e-app-secret-0123456789ab', ADMIN_SETUP_TOKEN: 'e2e-setup-token', CRON_SECRET: 'e2e-cron-secret' };
 const children = [];
@@ -77,7 +80,9 @@ export async function start() {
     { cwd: resolve(ROOT, 'site'), env: { ...process.env, APP_ENV: 'staging', VERCEL_ENV: 'preview' }, stdio: 'pipe' });
   startLocal(8092, DATA_STG, { SITE_DIR: STAGING_DIST, APP_ENV: 'staging', RATE_LIMIT_MAX: '1000', ...KYB_ENV });
 
-  await Promise.all([waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/'), waitFor('http://127.0.0.1:8092/api/health/')]);
+  startLocal(8094, DATA_PAY, { RATE_LIMIT_MAX: '1000', ...KYB_ENV, ...PAY_ENV });
+
+  await Promise.all([waitFor('http://127.0.0.1:8094/api/health/'), waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/'), waitFor('http://127.0.0.1:8092/api/health/')]);
   return async () => {
     for (const c of children) c.kill('SIGTERM');
     await new Promise((r) => smtp.close(r));

@@ -201,7 +201,8 @@ $('[data-login]').addEventListener('submit', async (e) => {
   } catch (err) { er.textContent = errText(err); er.hidden = false; }
 });
 $('[data-logout]').addEventListener('click', async () => { await A.logout().catch(() => {}); showView('login'); });
-root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => { const p = b.dataset.tab!; if (p === 'leads') await renderLeads(); else await renderList(); showPanel(p); }));
+// v6 收付款的标签（p- 开头）由 admin-pay.ts 渲染，这里只切换面板
+root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => { const p = b.dataset.tab!; if (p.startsWith('p-')) { showPanel(p); return; } if (p === 'leads') await renderLeads(); else await renderList(); showPanel(p); }));
 async function enterApp() { showView('app'); await Promise.all([renderList(), renderLeads()]); showPanel('apps'); }
 // 导航上的数字：0 也显示（不再出现空圆圈）；悬停时说明数字的含义
 function setCount(key: 'apps' | 'leads', n: number, meaning: string) {

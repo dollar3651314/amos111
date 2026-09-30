@@ -63,5 +63,19 @@
       "path": "/api/cron/cleanup/",
       "schedule": "15 19 * * *"
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "/api/v1?p=:path*"
+    },
+    {
+      "source": "/pay/:id/",
+      "destination": "/pay/"
+    },
+    {
+      "source": "/zh/pay/:id/",
+      "destination": "/zh/pay/"
+    }
   ]
 }

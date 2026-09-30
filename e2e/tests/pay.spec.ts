@@ -1,0 +1,234 @@
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { readJsonl, decodeQP, MAILS, KYB_ENV, PAY_ENV, DATA_PAY, TMP } from '../stack.mjs';
+// @ts-ignore 与后端同一份 TOTP 实现
+import { totpCode, totpStep } from '../../lead-api/src/kyb/totp.js';
+
+// v6 收付款端到端（正式构建、真实接口；数据库是内嵌 Postgres，链上用 TronGrid 替身）：
+// 后台初始化 → 钱包初始化（浏览器生成助记词，只提交公钥）→ 开通商户 → 商户设置密码和验证码 → 登录
+// → 客户、订单 → 模拟链上付款、两笔累计完成 → 开放 API（签名、先到账后建单）→ 提币：浏览器核对并签名 → 链上确认
+// → 归集 3 步 → 付款页面 → 安全检查：数据库和日志里没有助记词、私钥。
+const B = 'http://127.0.0.1:8094';
+const U = 1_000_000;
+const ADMIN_PW = 'e2e-pay-admin-password';
+const M_EMAIL = 'finance@pay-e2e.example';
+const M_PW = 'merchant e2e password';
+const HOT_KEY = '11'.repeat(32); // 本地测试用的热钱包私钥（config/wallets.json 的 local.hot）
+let adminSecret = '', merchantSecret = '';
+let words: string[] = [];
+let actx: BrowserContext, mctx: BrowserContext, admin: Page, merchant: Page;
+let apiKey = '', apiSecret = '';
+let orderNo = '', address = '';
+
+// 同一个动态码不能用两次：每次取一个比上次更新的时间步（必要时等下一个 30 秒）
+const lastStep: Record<string, number> = {};
+async function code(secret: string) {
+  for (;;) {
+    for (const off of [0, 30_000]) {
+      const c = totpCode(secret, Date.now() + off);
+      const s = totpStep(secret, c, Date.now());
+      if (s > (lastStep[secret] || 0)) { lastStep[secret] = s; return c; }
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+/** 邮件正文：nodemailer 会按内容选 quoted-printable 或 base64 */
+const mailText = (raw: string) => { const [head, ...rest] = raw.split('\r\n\r\n'); const body = rest.join('\r\n\r\n'); return /base64/i.test(head) ? Buffer.from(body.replace(/\s+/g, ''), 'base64').toString('utf8') : decodeQP(raw); };
+const mailsTo = (addr: string) => readJsonl(MAILS).filter((m: any) => m.to.includes(addr)).map((m: any) => decodeQP(m.raw));
+const fake = (page: Page, path: string, body: unknown = {}) => page.request.post(`${B}/__fake/${path}/`, { data: body });
+const tick = async (page: Page) => { const r = await page.request.get(`${B}/api/tick/`, { headers: { authorization: `Bearer ${PAY_ENV.TICK_SECRET}` } }); expect(r.status()).toBe(200); return r.json(); };
+const cspErrors = (page: Page) => { const errs: string[] = []; page.on('console', (m) => /Content Security Policy|Uncaught|TypeError/i.test(m.text()) && errs.push(m.text())); page.on('pageerror', (e) => errs.push(String(e))); return errs; };
+async function api(page: Page, method: 'GET' | 'POST', path: string, body?: unknown) {
+  const raw = body ? JSON.stringify(body) : '';
+  const ts = String(Math.floor(Date.now() / 1000));
+  const p = `/api/v1/${path}`;
+  const sig = createHmac('sha256', apiSecret).update([ts, method, p, createHash('sha256').update(raw).digest('hex')].join('\n')).digest('hex');
+  const r = await page.request.fetch(`${B}${p}`, { method, data: raw || undefined, headers: { 'content-type': 'application/json', 'X-QC-Key': apiKey, 'X-QC-Timestamp': ts, 'X-QC-Signature': sig, ...(method === 'POST' ? { 'Idempotency-Key': randomUUID() } : {}) } });
+  return { status: r.status(), body: await r.json() };
+}
+async function adminOk(page: Page) { await page.click('[data-pdialog-ok]'); }
+
+test.describe.serial('TC-P v6 收付款（正式接口）', () => {
+  // 同一个动态码不能用两次，测试里有时要等下一个 30 秒的动态码
+  test.setTimeout(120_000);
+  test.beforeAll(async ({ browser }) => {
+    actx = await browser.newContext({ baseURL: B }); admin = await actx.newPage();
+    mctx = await browser.newContext({ baseURL: B }); merchant = await mctx.newPage();
+  });
+  test.afterAll(async () => { await actx.close(); await mctx.close(); });
+
+  test('TC-P01 后台初始化并登录；钱包初始化：浏览器生成助记词，只提交公钥（AC-P11 ①）', async () => {
+    const errs = cspErrors(admin);
+    await admin.goto('/admin/');
+    await admin.fill('#s-token', KYB_ENV.ADMIN_SETUP_TOKEN); await admin.fill('#s-pw', ADMIN_PW); await admin.fill('#s-pw2', ADMIN_PW);
+    await admin.click('[data-setup] button[type="submit"]');
+    await expect(admin.locator('[data-setup2]')).toBeVisible();
+    adminSecret = (await admin.locator('[data-secret]').textContent())!.replace(/\s/g, '');
+    await admin.fill('#s-otp', totpCode(adminSecret, Date.now()));
+    await admin.click('[data-setup2] button[type="submit"]');
+    await expect(admin.locator('[data-view="login"]')).toBeVisible();
+    await admin.fill('#a-pw', ADMIN_PW); await admin.fill('#a-otp', await code(adminSecret));
+    await admin.click('[data-login] button[type="submit"]');
+    await expect(admin.locator('[data-view="app"]')).toBeVisible();
+    await admin.click('[data-tab="p-wallet"]');
+    await admin.click('text=初始化主助记词');
+    const lis = admin.locator('.mnemonic li');
+    await expect(lis).toHaveCount(24);
+    words = await lis.allTextContents();
+    await adminOk(admin);
+    for (const [i, n] of [3, 11, 20].entries()) await admin.fill(`#wi-${i}`, words[n - 1]);
+    await admin.fill('#wi-code', await code(adminSecret));
+    await adminOk(admin);
+    await expect(admin.locator('[data-pdialog]')).toContainText('初始化完成');
+    await adminOk(admin);
+    await expect(admin.locator('[data-panel="p-wallet"]')).toContainText('已初始化');
+    expect(errs).toEqual([]);
+  });
+
+  test('TC-P02 开通商户 → 邮件 → 设置密码和验证码 → 登录（AC-P1）', async () => {
+    const r = await admin.evaluate(async (email) => (await fetch('/api/wallet/?a=merchant-open', { method: 'POST', headers: { 'content-type': 'application/json', 'x-qc-csrf': '1' }, body: JSON.stringify({ name: 'Pay E2E Ltd', email, fee_in: { ppm: 10000, fixed: 0, min: 0 }, fee_out: { ppm: 0, fixed: 2000000, min: 0 }, order_mode: { enabled: true, low: 900000, high: 1100000, ttlMin: 30, lookbackH: 24 } }) })).status, M_EMAIL);
+    expect(r).toBe(200);
+    await expect.poll(() => mailsTo(M_EMAIL).length).toBeGreaterThan(0);
+    const link = mailsTo(M_EMAIL)[0].match(/https?:\/\/[^\s]+\/merchant\/\?setup=[A-Za-z0-9_-]+/)![0].replace(/^https?:\/\/[^/]+/, B);
+    const errs = cspErrors(merchant);
+    await merchant.goto(link);
+    await merchant.fill('#ms-pw', M_PW); await merchant.fill('#ms-pw2', M_PW);
+    await merchant.click('[data-setup] button[type="submit"]');
+    await expect(merchant.locator('[data-setup-qr]')).toHaveAttribute('src', /^data:image\/png;base64,/);
+    merchantSecret = (await merchant.locator('[data-setup-secret]').textContent())!.trim();
+    await merchant.fill('#ms-otp', await code(merchantSecret));
+    await merchant.click('[data-setup] button[type="submit"]');
+    await expect(merchant.locator('[data-view="login"]')).toBeVisible();
+    await merchant.fill('#ml-em', M_EMAIL); await merchant.fill('#ml-pw', M_PW); await merchant.fill('#ml-otp', await code(merchantSecret));
+    await merchant.click('[data-login] button[type="submit"]');
+    await expect(merchant.locator('[data-merchant-name]')).toHaveText('Pay E2E Ltd');
+    // 空状态（C32）
+    await expect(merchant.locator('[data-mpanel="overview"] .stat .v').first()).toHaveText('0.00');
+    await expect(merchant.locator('[data-mpanel="overview"]')).toContainText('暂无');
+    expect(errs).toEqual([]);
+  });
+
+  test('TC-P03 创建订单 → 模拟链上两笔付款 → 累计达到下限自动完成（AC-P2、P4、P5、P20）', async () => {
+    await merchant.click('[data-mtab="orders"]');
+    await merchant.click('[data-mpanel="orders"] .toolbar .btn-primary');
+    await merchant.fill('#mo-cust', 'buyer_1'); await merchant.fill('#mo-cname', 'Buyer One'); await merchant.fill('#mo-amt', '100');
+    await merchant.click('[data-mdialog-ok]');
+    await expect(merchant.locator('[data-mdialog]')).toContainText('等待付款');
+    const addrText = await merchant.locator('[data-mdialog] dd .mono').last().textContent();
+    address = addrText!.trim();
+    expect(address).toMatch(/^T[1-9A-HJ-NP-Za-km-z]{33}$/);
+    orderNo = (await merchant.locator('[data-mdialog-title]').textContent())!.match(/ORD-\d{8}-[0-9A-F]{8}/)![0];
+    await merchant.keyboard.press('Escape');
+    await fake(merchant, 'tron/pay', { to: address, amount: 60 * U });
+    await tick(merchant);
+    await fake(merchant, 'tron/pay', { to: address, amount: 35 * U });
+    await tick(merchant);
+    await merchant.click('[data-mtab="orders"]');
+    await expect(merchant.locator(`[data-order="${orderNo}"]`)).toContainText('已完成');
+    await merchant.click('[data-mtab="overview"]');
+    await expect(merchant.locator('[data-mpanel="overview"] .stat .v').first()).toHaveText('94.05'); // 95 − 1% 收款费
+    // 付款页面（正式接口）显示付款成功
+    const pay = await mctx.newPage();
+    await pay.goto(`/zh/pay/${orderNo}/`);
+    await expect(pay.locator('[data-pay-result-title]')).toHaveText('付款成功');
+    await pay.close();
+  });
+
+  test('TC-P04 开放 API：签名、先到账后建单、商户隔离（AC-P11 ③、P20）', async () => {
+    await merchant.click('[data-mtab="api"]');
+    await merchant.click('text=重新生成 Secret');
+    await merchant.fill('#mapi-code', await code(merchantSecret));
+    await merchant.click('[data-mdialog-ok]');
+    const kv = merchant.locator('[data-mdialog] dd .mono');
+    apiKey = (await kv.nth(0).textContent())!.trim(); apiSecret = (await kv.nth(1).textContent())!.trim();
+    expect(apiKey).toMatch(/^qc_test_/);
+    await merchant.click('[data-mdialog-ok]');
+    // 未签名的请求
+    expect((await merchant.request.get(`${B}/api/v1/balance/`)).status()).toBe(401);
+    expect((await api(merchant, 'GET', 'balance/')).body.available).toBe('94.05');
+    // 客户 buyer_2 先付款，再建订单：自动匹配
+    const c = (await api(merchant, 'POST', 'customers/', { customer_id: 'buyer_2', name: 'Buyer Two' })).body;
+    await fake(merchant, 'tron/pay', { to: c.address, amount: 49 * U });
+    await tick(merchant);
+    const o = (await api(merchant, 'POST', 'orders/', { customer_id: 'buyer_2', merchant_order_no: 'API-1', amount: '50' })).body;
+    expect(o.status).toBe('completed');
+    expect(o.deposits[0].matched_by).toBe('order');
+    const st = (await api(merchant, 'GET', 'customers/stats/?customer_id=buyer_2')).body;
+    expect([st.total, st.count]).toEqual(['49.00', 1]);
+    // AC-P14：开发者文档里的签名示例，原样运行（只把接口地址换成本地）
+    const env = { ...process.env, QC_KEY: apiKey, QC_SECRET: apiSecret };
+    const node = execFileSync(process.execPath, [join(TMP, '../../site/src/docs/sign-request.mjs')], { env: { ...env, QC_BASE: `${B}/api/v1/` }, encoding: 'utf8' });
+    expect(node.trim()).toMatch(/\/pay\/ORD-\d{8}-[0-9A-F]{8}\/$/);
+    const py = execFileSync('python3', [join(TMP, '../../site/src/docs/sign_request.py')], { env: { ...env, QC_BASE_URL: B }, encoding: 'utf8' });
+    expect(py).toContain("'available': '142.56'"); // 94.05 + 49 × 99%
+  });
+
+  test('TC-P05 提币：商户提交 → 后台浏览器核对并签名 → 链上确认后完成（AC-P8、P9、P11 ②）', async () => {
+    await merchant.click('[data-mtab="withdraw"]');
+    await merchant.fill('#mw-to', 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'); await merchant.fill('#mw-amt', '50'); await merchant.fill('#mw-cust', 'buyer_1');
+    await merchant.fill('#mw-code', await code(merchantSecret));
+    await merchant.click('.wd-form button[type="submit"]');
+    await expect(merchant.locator('[data-mpanel="withdraw"]')).toContainText('待审核');
+    await tick(merchant);
+    await expect.poll(() => readJsonl(MAILS).some((m: any) => /请到运营后台审核/.test(mailText(m.raw)))).toBe(true);
+    // 热钱包有足够的 USDT（替身）
+    const hot = JSON.parse(readFileSync(new URL('../../config/wallets.json', import.meta.url), 'utf8')).local.hot;
+    await fake(admin, 'tron/account', { address: hot, account: { activated: true, trx: 100 * U, trc20: { TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf: 1000 * U } } });
+    await admin.click('[data-tab="p-withdrawals"]');
+    await admin.locator('[data-panel="p-withdrawals"] tbody input[type=checkbox]').first().check();
+    await admin.click('[data-panel="p-withdrawals"] .sumbar .btn-primary');
+    await expect(admin.locator('[data-pdialog]')).toContainText('✓ 一致');
+    await admin.fill('#ps-code', await code(adminSecret));
+    await admin.fill('#ps-hot', '22'.repeat(32)); // 不是热钱包的私钥：页面拦下
+    await adminOk(admin);
+    await expect(admin.locator('[data-pdialog]')).toContainText('不是热钱包');
+    await admin.fill('#ps-hot', HOT_KEY);
+    await adminOk(admin);
+    await expect(admin.locator('[data-pdialog]')).not.toBeVisible();
+    await expect(admin.locator('#ps-hot')).toHaveValue(''); // 签名后私钥已从输入框清除
+    await fake(admin, 'tron/confirm-all');
+    await tick(admin);
+    await merchant.click('[data-mtab="withdraw"]');
+    await expect(merchant.locator('[data-mpanel="withdraw"] tbody tr').first()).toContainText('已完成');
+  });
+
+  test('TC-P06 归集：助记词 + 热钱包私钥签名；借出能量 → 转出 USDT → 收回能量（AC-P10）', async () => {
+    await fake(admin, 'tron/account', { address, account: { activated: true, trx: 0, trc20: { TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf: 95 * U } } });
+    await admin.click('[data-tab="p-sweep"]');
+    await admin.fill('[data-panel="p-sweep"] .toolbar input', '1'); await admin.press('[data-panel="p-sweep"] .toolbar input', 'Enter');
+    const row = admin.locator('[data-panel="p-sweep"] tbody tr', { hasText: 'buyer_1' });
+    await row.locator('input[type=checkbox]').check();
+    await admin.click('[data-panel="p-sweep"] .sumbar .btn-primary');
+    const dlg = admin.locator('[data-pdialog]');
+    await expect(dlg).toContainText('借出能量');
+    await expect(dlg).not.toContainText('✗');
+    await admin.fill('#ps-code', await code(adminSecret));
+    await admin.fill('#ps-mn', words.join(' '));
+    await admin.fill('#ps-hot', HOT_KEY);
+    await adminOk(admin);
+    await expect(dlg).not.toBeVisible();
+    for (let i = 0; i < 3; i++) { await fake(admin, 'tron/confirm-all'); await tick(admin); }
+    const rows = await (await admin.request.post(`${B}/__fake/sql/`, { data: { sql: "select status from sign_batches where kind = 'sweep'" } })).json();
+    expect(rows[0].status).toBe('done');
+  });
+
+  test('TC-P07 安全：数据库和服务器日志里没有助记词和私钥（AC-P11 ①）', async () => {
+    const dump = await (await admin.request.post(`${B}/__fake/sql/`, { data: { sql: `select string_agg(t::text, ' ') s from (
+      select row_to_json(x)::text t from pay_meta x union all select row_to_json(x)::text from sign_batches x union all select row_to_json(x)::text from pay_audit x
+      union all select row_to_json(x)::text from customers x union all select row_to_json(x)::text from callbacks x) q` } })).json();
+    const text = String(dump[0].s);
+    expect(text.length).toBeGreaterThan(1000);
+    expect(text).not.toContain(HOT_KEY);
+    expect(text).not.toContain(words.slice(0, 4).join(' '));
+    expect(text).not.toContain(words.join(' '));
+    const log = readFileSync(join(TMP, 'local-8094.log'), 'utf8');
+    expect(log).not.toContain(HOT_KEY);
+    expect(log).not.toContain(words.slice(0, 4).join(' '));
+    // 数据目录里的任何文件都不包含私钥
+    const walk = (d: string): string[] => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walk(p) : [p]; });
+    for (const f of walk(DATA_PAY)) expect(readFileSync(f).includes(Buffer.from(HOT_KEY))).toBe(false);
+  });
+});
