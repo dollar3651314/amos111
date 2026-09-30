@@ -43,6 +43,8 @@ test('签名：没有签名、签名错误、时间戳过期都返回 401', asyn
   assert.deepEqual(ok.body, { available: '0.00', frozen: '0.00', currency: 'USDT' });
   // 线上经过改写后的地址（/api/v1?p=balance/）和商户签名时的地址一致
   assert.equal(canonicalPath('https://x/api/v1?p=orders/&order_no=A'), '/api/v1/orders/?order_no=A');
+  // vercel.json 开启了 trailingSlash，改写目标是 /api/v1/?p=...（BUG-P4：没有结尾的 / 时 Vercel 返回 404）
+  assert.equal(canonicalPath('https://x/api/v1/?p=orders/&order_no=A'), '/api/v1/orders/?order_no=A');
   assert.equal((await call(a.cred, 'GET', '', null, { url: 'https://api.test/api/v1?p=balance/' })).status, 200);
 });
 
@@ -106,4 +108,11 @@ test('客户统计、到账筛选、账本、未知接口', async () => {
   assert.equal((await call(a.cred, 'GET', 'deposits/?matched=false')).body.items.length, 1);
   assert.equal((await call(a.cred, 'GET', 'ledger/')).body.items.length, 2);
   assert.equal((await call(a.cred, 'GET', 'nope/')).status, 404);
+});
+
+test('vercel.json：改写到函数的目标地址以 / 结尾（trailingSlash 开启时，没有 / 会 404，BUG-P4）', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const v = JSON.parse(await readFile(new URL('../../vercel.json', import.meta.url), 'utf8'));
+  assert.equal(v.trailingSlash, true);
+  for (const r of v.rewrites) assert.match(r.destination.split('?')[0], /\/$/, r.destination);
 });
