@@ -12,7 +12,8 @@ import { signTxId, addressOfPrivateKey, keyForAddress } from '../../../lead-api/
 import { decodeRaw } from '../../../lead-api/src/pay/txcodec.js';
 import { describeFee, fmtUsdt, parseUsdt, shortAddr } from '../lib/money';
 import { copyBtn, field, fieldErr, fmtTime, h, mono, stat, status, table, toast } from './ui';
-import { dialog, feeInputs, modeInputs, modeText, tronscan, minsAgo } from './admin-pay';
+import { dialog, feeInputs, modeInputs, modeText, tronscan, minsAgo, TRONSCAN } from './admin-pay';
+import { renderOverview } from './admin-overview';
 
 const root = document.getElementById('admin-root')!;
 const PROTO = root.dataset.prototype === '1';
@@ -44,7 +45,11 @@ async function call(a: string, body?: unknown, qs = '') {
 const render: Record<string, (p: HTMLElement) => Promise<void>> = {};
 async function show(tab: string) {
   const p = $(`[data-panel="${tab}"]`);
-  try { await render[tab.slice(2)](p); } catch (e) { p.replaceChildren(toolbar(''), h('p', { class: 'alert' }, errText(e))); }
+  try { await render[tab.slice(2)](p); } catch (e) {
+    // 收付款还没有配置（例如只用开户功能的环境）：概览退回"开户申请"
+    if (tab === 'p-overview' && (e as WErr).code === 'not_configured') { root.querySelector<HTMLElement>('[data-tab="apps"]')?.click(); return; }
+    p.replaceChildren(toolbar(''), h('p', { class: 'alert' }, errText(e)));
+  }
   counts();
 }
 async function counts() {
@@ -143,6 +148,10 @@ function signDialog(job: SignJob) {
 }
 
 // ============ 商户 ============
+render.overview = async (p) => {
+  const refresh = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: () => show('p-overview') }, '刷新');
+  renderOverview(p, await call('overview'), (tab) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click(), refresh);
+};
 render.merchants = async (p) => {
   const { merchants, pending } = await call('merchants');
   p.replaceChildren(
@@ -238,7 +247,7 @@ render.withdrawals = async (p) => {
       const cb = h('input', { type: 'checkbox', class: 'check', checked: isP && wdSel.has(w.id), disabled: !isP, 'aria-label': `选择 ${w.id}` }) as HTMLInputElement;
       cb.addEventListener('change', () => { cb.checked ? wdSel.add(w.id) : wdSel.delete(w.id); render.withdrawals(p); });
       const st = h('span', { class: 'status-cell' }, status(...(WD[w.status] || ['submitted', w.status])));
-      if (w.txid) st.append(h('a', { href: `https://tronscan.org/#/transaction/${w.txid}`, target: '_blank', rel: 'noopener noreferrer', class: 'mono' }, w.txid.slice(0, 8) + '…'));
+      if (w.txid) st.append(h('a', { href: `${TRONSCAN}/#/transaction/${w.txid}`, target: '_blank', rel: 'noopener noreferrer', class: 'mono' }, w.txid.slice(0, 8) + '…'));
       if (w.reason) st.append(h('span', { class: 'hint muted' }, w.reason));
       return [cb, mono(w.id), t(w.created_at), isP ? minsAgo(w.created_at) : '—', w.merchant, w.kind === 'payout' ? '代付' : '商户提现', w.customer_id ? mono(w.customer_id) : '—', mono(shortAddr(w.to), w.to), h('b', {}, usd(w.amount)), usd(w.fee), w.source === 'api' ? 'API' : '后台', st];
     }), wdAll ? '暂无提币' : '暂无待审核的提币'),

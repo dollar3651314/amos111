@@ -4,6 +4,7 @@
 // 签名页面的核对规则见《架构方案 v6》§2.4：页面显示的收款地址和金额来自浏览器对交易原文的解码，不是服务器发来的文字。
 import { calcFee, describeFee, fmtUsdt, parseUsdt, shortAddr, type FeeRule } from '../lib/money';
 import * as M from './v6-mock';
+import { renderOverview } from './admin-overview';
 import { copyBtn, field, fieldErr, fmtTime, h, makeDialog, mono, stat, status, table, toast } from './ui';
 
 const root = document.getElementById('admin-root')!;
@@ -16,7 +17,9 @@ const usd = (n: number) => fmtUsdt(n);
 const U = 1_000_000;
 const toolbar = (title: string, ...right: (HTMLElement | null)[]) => h('div', { class: 'toolbar' }, h('h1', { class: 'm0' }, title), h('div', { class: 'tool-actions' }, ...right));
 export const minsAgo = (iso: string) => { const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 60 ? `${m} 分钟` : `${Math.floor(m / 60)} 小时 ${m % 60} 分钟`; };
-export const tronscan = (a: string) => h('a', { href: `https://tronscan.org/#/address/${a}`, target: '_blank', rel: 'noopener noreferrer' }, 'Tronscan ↗');
+// 生产用主网的 Tronscan；测试环境和本地用 Nile 测试网的 Tronscan（主网上查不到测试网的交易）
+export const TRONSCAN = root.dataset.walletEnv === 'production' ? 'https://tronscan.org' : 'https://nile.tronscan.org';
+export const tronscan = (a: string) => h('a', { href: `${TRONSCAN}/#/address/${a}`, target: '_blank', rel: 'noopener noreferrer' }, 'Tronscan ↗');
 const USDT_CONTRACT = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
 const render: Record<string, (p: HTMLElement) => void> = {};
@@ -136,6 +139,25 @@ export const modeInputs = (mode: M.OrderMode, prefix: string) => {
   return { box, read };
 };
 export const modeText = (m: M.OrderMode) => (m.enabled ? `${m.low / 10000}%–${m.high / 10000}% · ${m.ttlMin} 分钟 · 回看 ${m.lookbackH} 小时` : '未开启');
+// 原型的概览：示例数据（和 v6-mock 的量级一致）
+render.overview = (p) => {
+  const E = M.merchants.length === 0; // 空状态预览
+  const z = (v: string) => (E ? '0.00' : v);
+  renderOverview(p, {
+    funds: { collected_total: z('486215.40'), deposit_count: E ? 0 : 1287, owed_total: z('58402.18'), owed_available: z('57400.18'), owed_frozen: z('1002.00'),
+      assets_total: z('63971.62'), unswept_total: z('12480.30'), hot_usdt: z('41491.32'), cold_usdt: z('10000.00'), cold_configured: true,
+      profit_total: z('5569.44'), profit_now: z('0.00'), profit_after_sweep: z('5569.44'), income_fee_in: z('4862.15'), income_fee_out: z('706.00'), income_dust: z('1.29') },
+    todo: { withdrawals_count: E ? 0 : M.withdrawals.filter((w) => w.status === 'pending').length, withdrawals_amount: z('3500.00'), kyb_pending: E ? 0 : 2, merchants_to_open: E ? 0 : 1, anomalies: E ? 0 : M.anomalies.filter((a) => !a.handled).length, callbacks_failed: E ? 0 : 1 },
+    sweep: { unswept_total: z('12480.30'), address_count: E ? 0 : 38, over_threshold: E ? 0 : 21, over_threshold_total: z('11902.00'), threshold: '100.00', hot_trx: z('1520.40'), energy_left: E ? 0 : 1_300_000, energy_per_sweep: 65_000, month_sweep_trx: z('86.00') },
+    periods: {
+      today: { amount: z('8210.00'), count: E ? 0 : 23, fees_in: z('82.10'), active_merchants: E ? 0 : 3, new_customers: E ? 0 : 5, orders_done: E ? 0 : 14, orders_closed: E ? 0 : 15 },
+      d7: { amount: z('61540.20'), count: E ? 0 : 171, fees_in: z('615.40'), active_merchants: E ? 0 : 4, new_customers: E ? 0 : 29, orders_done: E ? 0 : 102, orders_closed: E ? 0 : 110 },
+      d30: { amount: z('240118.75'), count: E ? 0 : 652, fees_in: z('2401.19'), active_merchants: E ? 0 : 5, new_customers: E ? 0 : 118, orders_done: E ? 0 : 398, orders_closed: E ? 0 : 431 },
+    },
+    top_merchants: E ? [] : M.merchants.slice(0, 5).map((m, i) => ({ name: m.name, amount: ['98210.00', '61200.50', '40100.25', '26008.00', '14600.00'][i], count: [260, 170, 110, 72, 40][i] })),
+    system: { tick_age_s: 38, recon: E ? null : { day: new Date().toISOString().slice(0, 10), diff: '0.00', complete: true }, db_bytes: E ? 2_000_000 : 41_000_000, db_limit_bytes: 500 * 1024 * 1024 },
+  }, (tab) => root.querySelector<HTMLElement>(`[data-tab="${tab}"]`)?.click());
+};
 render.merchants = (p) => {
   const pending = M.approvedApps.filter((a) => !M.merchants.some((m) => m.name === a.company));
   const openBox = pending.length ? h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '开户已通过，待开通收付款'),

@@ -43,6 +43,7 @@ const WALLET_ENV = IS_STAGING ? 'staging' : !IS_PROTOTYPE && process.env.VERCEL_
     <!-- 已登录 -->
     <div class="admin-shell" data-view="app" hidden>
       <nav class="admin-nav" aria-label="后台导航">
+        <button type="button" data-tab="p-overview">概览</button>
         <button type="button" data-tab="apps" aria-current="page">开户申请 <span class="badge" data-count="apps"></span></button>
         <button type="button" data-tab="leads">官网线索 <span class="badge" data-count="leads"></span></button>
         <!-- v6 收付款 -->
@@ -82,6 +83,7 @@ const WALLET_ENV = IS_STAGING ? 'staging' : !IS_PROTOTYPE && process.env.VERCEL_
           </div>
         </section>
 
+        <section data-panel="p-overview" hidden></section>
         <section data-panel="p-merchants" hidden></section>
         <section data-panel="p-customers" hidden></section>
         <section data-panel="p-sweep" hidden></section>

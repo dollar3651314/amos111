@@ -203,7 +203,9 @@ $('[data-login]').addEventListener('submit', async (e) => {
 $('[data-logout]').addEventListener('click', async () => { await A.logout().catch(() => {}); showView('login'); });
 // v6 收付款的标签（p- 开头）由 admin-pay.ts 渲染，这里只切换面板
 root.querySelectorAll<HTMLElement>('[data-tab]').forEach((b) => b.addEventListener('click', async () => { const p = b.dataset.tab!; if (p.startsWith('p-')) { showPanel(p); return; } if (p === 'leads') await renderLeads(); else await renderList(); showPanel(p); }));
-async function enterApp() { showView('app'); await Promise.all([renderList(), renderLeads()]); showPanel('apps'); }
+// 登录后默认打开"概览"（收付款没有配置时，概览页会自动退回"开户申请"）
+// 先切到概览再显示后台：否则数据加载期间用户点了别的页面，加载完又会被切回概览
+async function enterApp() { await Promise.all([renderList(), renderLeads()]); showPanel('apps'); $<HTMLElement>('[data-tab="p-overview"]').click(); showView('app'); }
 // 导航上的数字：0 也显示（不再出现空圆圈）；悬停时说明数字的含义
 function setCount(key: 'apps' | 'leads', n: number, meaning: string) {
   const b = $(`[data-count="${key}"]`);

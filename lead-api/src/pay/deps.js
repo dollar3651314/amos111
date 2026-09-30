@@ -34,12 +34,13 @@ export async function createPayDeps({ config, kyb, send, getIp, origin }) {
     return m && m.callback_url && m.api_secret_enc ? { url: m.callback_url, secret: decryptJson(keys.enc, m.api_secret_enc) } : null;
   };
   const listApproved = kyb.listApproved || (async () => []);
+  const pendingKyb = kyb.pendingKyb || (async () => 0);
   return {
     db, tron, keys, ops, wallets,
     v1: createApiV1({ db, keys, ops, getIp }),
     merchant: createMerchantApi({ db, keys, ops, send }),
     pay: createPayApi({ db }),
-    wallet: createWalletApi({ db, tron, keys, wallets, send, origin, notify, listApproved, runDaily: () => runDaily({ db, tron, wallets, notify }), ...gate }),
+    wallet: createWalletApi({ db, tron, keys, wallets, send, origin, notify, listApproved, pendingKyb, runDaily: () => runDaily({ db, tron, wallets, notify }), ...gate }),
     tick: () => runTick({ db, tron, getTarget, notify, adminUrl: `${origin}/admin/`, confirmSweeps: () => sweepProgress(db, tron, { notify }) }),
     daily: () => runDaily({ db, tron, wallets, notify }),
   };

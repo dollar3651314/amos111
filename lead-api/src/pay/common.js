@@ -15,7 +15,11 @@ export function derivePayKeys(appSecret) {
 export const amt = (u) => (u === null || u === undefined ? null : fmtUsdt(u).replace(/,/g, ''));
 const AMOUNT_KEYS = new Set(['amount', 'matched', 'fee', 'credited', 'available', 'frozen', 'total', 'fees', 'unmatched', 'balance', 'available_after', 'frozen_after', 'payouts',
   // 后台接口（BUG-P11：这些字段之前漏了，页面把 0.000001 USDT 为单位的整数当成 USDT 显示，放大了 100 万倍）
-  'onchain', 'balances', 'chain', 'diff', 'usdt', 'trx', 'burn_trx', 'deposits_total', 'customers_total', 'addresses', 'hot', 'cold', 'today', 'today_fees']);
+  'onchain', 'balances', 'chain', 'diff', 'usdt', 'trx', 'burn_trx', 'deposits_total', 'customers_total', 'addresses', 'hot', 'cold', 'today', 'today_fees',
+  // 运营后台"概览"
+  'collected_total', 'owed_total', 'owed_available', 'owed_frozen', 'assets_total', 'unswept_total', 'hot_usdt', 'cold_usdt',
+  'profit_total', 'profit_now', 'profit_after_sweep', 'income_fee_in', 'income_fee_out', 'income_dust', 'withdrawals_amount',
+  'over_threshold_total', 'threshold', 'hot_trx', 'month_sweep_trx', 'fees_in']);
 // 注意：只有值是数字时才转换，所以 hot、cold 作为地址（字符串）时不受影响；数量类的字段不要用上面的名字（例如 total 是金额，地址数量用 address_count）
 /** 把对象里的金额字段（整数）转成字符串 */
 export function money(v) {
