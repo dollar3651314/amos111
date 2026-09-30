@@ -10,7 +10,12 @@ export async function createPgDb(url) {
   const { default: postgres } = await import('postgres');
   const sql = postgres(url, {
     prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10, onnotice: () => {},
-    types: { bigint: { to: INT8, from: [INT8], serialize: (x) => String(x), parse: (x) => Number(x) } },
+    types: {
+      bigint: { to: INT8, from: [INT8], serialize: (x) => String(x), parse: (x) => Number(x) },
+      // 代码里 jsonb 参数一律先 JSON.stringify 再传入（和 PGlite 一致）。postgres.js 默认会对 json/jsonb 参数再 stringify 一次，
+      // 存进去的就成了 JSON 字符串，读出来也是字符串（BUG-P5）。这里字符串原样传入，读出时解析成对象。
+      json: { to: 114, from: [114, 3802], serialize: (x) => (typeof x === 'string' ? x : JSON.stringify(x)), parse: (x) => JSON.parse(x) },
+    },
   });
   const wrap = (s) => ({ query: async (text, params = []) => [...(await s.unsafe(text, params))] });
   return { ...wrap(sql), tx: (fn) => sql.begin((t) => fn(wrap(t))), end: () => sql.end({ timeout: 5 }) };
@@ -23,4 +28,20 @@ export async function createLiteDb(dir) {
   const wrap = (s) => ({ query: async (text, params = []) => (await s.query(text, params)).rows });
   // PGlite 只有一个连接：事务串行执行，行锁的语义和生产一致
   return { ...wrap(db), tx: (fn) => db.transaction((t) => fn(wrap(t))), exec: (text) => db.exec(text), end: () => db.close() };
+}
+
+/**
+ * 测试用：设置了 TEST_DATABASE_URL 时连真实的 Postgres（每次一个新的 schema，互不影响），否则用内嵌 Postgres。
+ * 本地和线上用的驱动不同（PGlite / postgres.js），用这个在真实 Postgres 上把整套测试跑一遍（BUG-P5）。
+ */
+export async function createTestDb() {
+  const url = process.env.TEST_DATABASE_URL;
+  if (!url) return createLiteDb();
+  const schema = `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const admin = await createPgDb(url);
+  await admin.query(`create schema ${schema}`);
+  await admin.end();
+  const u = new URL(url);
+  u.searchParams.set('options', `-c search_path=${schema}`);
+  return createPgDb(u.toString());
 }

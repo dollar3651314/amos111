@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { HDKey } from '@scure/bip32';
-import { createLiteDb } from '../src/pay/db.js';
+import { createTestDb } from '../src/pay/db.js';
 import { migrate } from '../src/pay/schema.js';
 import * as core from '../src/pay/core.js';
 import { deriveAddress } from '../src/pay/tron.js';
@@ -15,7 +15,7 @@ let seq = 0;
 const tx = () => `tx${String(++seq).padStart(62, '0')}`;
 
 async function setup(mode = core.DEFAULT_MODE) {
-  const db = await createLiteDb();
+  const db = await createTestDb();
   await migrate(db);
   await core.setMeta(db, 'xpub', XPUB);
   const m = await core.createMerchant(db, { id: 'm1', name: 'Acme', feeIn: { ppm: 10_000, fixed: 0, min: 0 }, feeOut: { ppm: 0, fixed: 2 * U, min: 0 }, mode, cashoutWallets: [HOT] });

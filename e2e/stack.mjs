@@ -80,7 +80,8 @@ export async function start() {
     { cwd: resolve(ROOT, 'site'), env: { ...process.env, APP_ENV: 'staging', VERCEL_ENV: 'preview' }, stdio: 'pipe' });
   startLocal(8092, DATA_STG, { SITE_DIR: STAGING_DIST, APP_ENV: 'staging', RATE_LIMIT_MAX: '1000', ...KYB_ENV });
 
-  startLocal(8094, DATA_PAY, { RATE_LIMIT_MAX: '1000', ...KYB_ENV, ...PAY_ENV });
+  // E2E_DATABASE_URL：改用真实的 Postgres（线上的驱动 postgres.js），和线上一致（BUG-P5）
+  startLocal(8094, DATA_PAY, { RATE_LIMIT_MAX: '1000', ...KYB_ENV, ...PAY_ENV, ...(process.env.E2E_DATABASE_URL ? { LOCAL_PG_URL: process.env.E2E_DATABASE_URL } : {}) });
 
   await Promise.all([waitFor('http://127.0.0.1:8094/api/health/'), waitFor('http://127.0.0.1:8080/api/health/'), waitFor('http://127.0.0.1:3002/api/health/'), waitFor('http://127.0.0.1:8090/api/health/'), waitFor('http://127.0.0.1:8092/api/health/')]);
   return async () => {

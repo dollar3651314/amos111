@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { hex } from '@scure/base';
 import { mnemonicToSeedSync } from '@scure/bip39';
 import { HDKey } from '@scure/bip32';
-import { createLiteDb } from '../src/pay/db.js';
+import { createTestDb } from '../src/pay/db.js';
 import { migrate } from '../src/pay/schema.js';
 import * as core from '../src/pay/core.js';
 import { createFakeTron } from '../src/pay/fake-trongrid.js';
@@ -24,7 +24,7 @@ const COLD = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 const keys = derivePayKeys('test-app-secret-test-app-secret-0123456789');
 
 async function setup() {
-  const db = await createLiteDb(); await migrate(db);
+  const db = await createTestDb(); await migrate(db);
   await core.setMeta(db, 'xpub', XPUB);
   const tron = createFakeTron();
   const m = await core.createMerchant(db, { id: 'm1', name: 'Acme', feeIn: { ppm: 10_000, fixed: 0, min: 0 }, feeOut: { ppm: 0, fixed: 2 * U, min: 0 } });
