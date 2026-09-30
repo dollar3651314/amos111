@@ -306,3 +306,11 @@ dialog[data-mdialog] .form-card > *, dialog[data-pdialog] .form-card > *, dialog
 .picker-new { color: var(--accent); font-weight: 600; }
 .picker-empty { padding: 8px 10px; font-size: 0.9rem; }
 input[readonly] { background: var(--bg-soft); color: var(--text-muted); }
+
+/* 运营后台"概览"的待处理：数字不为 0 时突出显示，点击跳到对应页面 */
+.todo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin: 0 0 18px; }
+.todo-item { display: flex; align-items: center; gap: 10px; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; font: inherit; color: inherit; }
+.todo-item:hover { border-color: var(--accent); }
+.todo-n { font-size: 1.3rem; font-weight: 800; min-width: 2ch; color: var(--text-muted); }
+.todo-on { border-color: var(--accent); }
+.todo-on .todo-n { color: var(--accent); }

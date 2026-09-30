@@ -2,6 +2,11 @@
 // 授权联系人邮箱取开户表第 ③ 步；已登记的提现钱包取开户表第 ⑥ 步（附录 B）的钱包地址。
 import { isValidAddress } from './tron.js';
 
+/** 待审核的开户申请数量（运营后台"概览"的待处理） */
+export function pendingKybCount(repo) {
+  return async () => (await repo.list()).filter((a) => repo.effectiveStatus(a) === 'submitted').length;
+}
+
 export function approvedFromKyb(repo) {
   return async function listApproved() {
     const apps = await repo.list();

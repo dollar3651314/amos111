@@ -316,7 +316,11 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await tick(admin);
     await fake(admin, 'daily');
     await admin.goto('/admin/');
-    for (const tab of ['p-merchants', 'p-customers', 'p-sweep', 'p-withdrawals', 'p-anomalies', 'p-recon', 'p-wallet', 'p-status']) {
+    // 登录后默认打开"概览"
+    await expect(admin.locator('[data-panel="p-overview"]')).toBeVisible();
+    await expect(admin.locator('[data-panel="p-overview"]')).toContainText('现在就能转走的利润');
+    await expect(admin.locator('[data-panel="p-overview"]')).toContainText('欠商户');
+    for (const tab of ['p-overview', 'p-merchants', 'p-customers', 'p-sweep', 'p-withdrawals', 'p-anomalies', 'p-recon', 'p-wallet', 'p-status']) {
       await admin.click(`[data-tab="${tab}"]`);
       await expect(admin.locator(`[data-panel="${tab}"] .alert`)).toHaveCount(0);
       await admin.waitForLoadState('networkidle');

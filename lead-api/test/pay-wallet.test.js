@@ -168,3 +168,26 @@ test('热钱包一栏可以填私钥或助记词：助记词按 TRON 路径找�
   assert.equal((await keyForAddress('abandon about', first)).error, 'format');
   assert.equal((await keyForAddress(words.replace('about', 'abandon'), first)).error, 'mnemonic');
 });
+
+test('概览：代收、欠商户、平台资产、利润（现在能转走 / 归集后）、利润来源、待处理、待归集', async () => {
+  const { db, tron, call } = await setup();
+  const a = await db.tx((t) => core.ensureCustomer(t, 'm1', 'ov'));
+  await core.recordDeposit(db, { txid: 'ov'.padEnd(64, '0'), logIndex: 0, block: 1, to: a.address, amount: 100 * U, time: new Date() }); // 收款费 1%
+  await core.recordDeposit(db, { txid: 'ov'.padEnd(64, '1'), logIndex: 0, block: 2, to: a.address, amount: 1, time: new Date() }); // 灰尘
+  tron.accounts.set(HOT, { activated: true, trx: 300 * U, trc20: { [tron.contract]: 50 * U } });
+  tron.accounts.set(COLD, { activated: true, trx: 0, trc20: { [tron.contract]: 20 * U } });
+  const r = await call('overview');
+  assert.equal(r.status, 200);
+  const f = r.body.funds;
+  assert.deepEqual([f.collected_total, f.owed_total, f.owed_available, f.owed_frozen], ['100.00', '99.00', '99.00', '0.00']);
+  assert.deepEqual([f.unswept_total, f.hot_usdt, f.cold_usdt, f.assets_total], ['100.000001', '50.00', '20.00', '170.000001']);
+  assert.deepEqual([f.profit_total, f.profit_now, f.profit_after_sweep], ['71.000001', '0.00', '71.000001']); // 钱包 70 < 欠商户 99：现在不能转走
+  assert.deepEqual([f.income_fee_in, f.income_fee_out, f.income_dust], ['1.00', '0.00', '0.000001']);
+  assert.equal(r.body.todo.anomalies, 1);
+  assert.deepEqual([r.body.sweep.address_count, r.body.sweep.over_threshold, r.body.sweep.hot_trx], [1, 1, '300.00']);
+  assert.deepEqual([r.body.periods.today.amount, r.body.periods.today.count, r.body.periods.d30.fees_in], ['100.00', 1, '1.00']);
+  // 钱包里的钱多于欠商户时，多出来的部分现在就能转走
+  tron.accounts.set(HOT, { activated: true, trx: 300 * U, trc20: { [tron.contract]: 150 * U } });
+  const f2 = (await call('overview')).body.funds;
+  assert.deepEqual([f2.profit_total, f2.profit_now, f2.profit_after_sweep], ['171.000001', '71.00', '100.000001']);
+});
