@@ -95,8 +95,25 @@ test('订单模式关闭时不能建订单；订单过期处理', async () => {
   const { db: db2, m: m2 } = await setup();
   const o = await core.createOrder(db2, m2, { customerId: 'u1', merchantOrderNo: 'E-1', amount: 100 * U });
   await core.recordDeposit(db2, { txid: tx(), logIndex: 0, block: 1, to: o.address, amount: 10 * U, time: new Date() });
-  assert.equal(await core.expireOrders(db2, new Date(Date.now() + 31 * 60_000)), 1);
+  // 过期后再等 5 分钟才处理（F3）：这段时间扫到的、过期前付的钱还能匹配
+  assert.equal(await core.expireOrders(db2, new Date(Date.now() + 33 * 60_000)), 0);
+  await core.recordDeposit(db2, { txid: tx(), logIndex: 0, block: 2, to: o.address, amount: 5 * U, time: new Date(Date.now() + 29 * 60_000) });
+  assert.equal((await core.orderView(db2, o.order_no)).matched, 15 * U);
+  assert.equal(await core.expireOrders(db2, new Date(Date.now() + 36 * 60_000)), 1);
   assert.equal((await core.orderView(db2, o.order_no)).status, 'expired_partial');
+});
+
+test('收款手续费最多等于到账金额（F1）：最低收费大于到账金额时入账 0，不会让余额变成负数', async () => {
+  const db = await createTestDb(); await migrate(db);
+  await core.setMeta(db, 'xpub', XPUB);
+  await core.createMerchant(db, { id: 'mf', name: 'Fee', feeIn: { ppm: 0, fixed: 0, min: 2 * U }, feeOut: { ppm: 0, fixed: 0, min: 0 }, mode: core.DEFAULT_MODE });
+  const c = await db.tx((t) => core.ensureCustomer(t, 'mf', 'u1'));
+  const r = await core.recordDeposit(db, { txid: tx(), logIndex: 0, block: 1, to: c.address, amount: 1.5 * U, time: new Date() });
+  assert.equal(r.status, 'credited');
+  assert.equal(r.deposit.fee, 1.5 * U);
+  assert.deepEqual(await db.query('select available from balances where merchant_id = $1', ['mf']), [{ available: 0 }]);
+  await core.recordDeposit(db, { txid: tx(), logIndex: 0, block: 2, to: c.address, amount: 50 * U, time: new Date() });
+  assert.deepEqual(await db.query('select available from balances where merchant_id = $1', ['mf']), [{ available: 48 * U }]);
 });
 
 test('同一个客户：建订单和到账同时发生，不会重复匹配', async () => {

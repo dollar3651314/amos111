@@ -106,7 +106,7 @@ export function createMerchantApi({ db, keys, ops, send, now = () => Date.now() 
     async overview(m) {
       const bal = await ops.balance(m);
       const [t] = await db.query(`select coalesce(sum(amount), 0)::bigint total, count(*)::int n, coalesce(sum(fee), 0)::bigint fees from deposits
-        where merchant_id = $1 and result = 'credited' and time >= now() - interval '24 hours'`, [m.id]);
+        where merchant_id = $1 and result = 'credited' and time >= (date_trunc('day', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai')`, [m.id]); // 今日 = 东八区的自然日（F9）
       const [o] = await db.query(`select count(*)::int n from orders where merchant_id = $1 and status in ('pending', 'partial')`, [m.id]);
       const [u] = await db.query(`select coalesce(sum(amount), 0)::bigint total, count(*)::int n from deposits where merchant_id = $1 and result = 'credited' and order_id is null`, [m.id]);
       const [w] = await db.query(`select count(*)::int n from withdrawals where merchant_id = $1 and status = 'pending'`, [m.id]);

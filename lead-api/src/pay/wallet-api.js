@@ -171,7 +171,8 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
       const items = [];
       for (const c of rows) {
         const acc = await tron.account(c.address);
-        const usdt = acc.trc20[tron.contract] || 0;
+        // 只归集账本上记录过的金额（F6）：链上可能多了一笔还没扫到的到账，先不动它，扫到后下次再归集，账本和链上保持一致
+        const usdt = Math.min(Number(acc.trc20[tron.contract]) || 0, Number(c.onchain) || 0);
         if (!usdt) continue;
         const delegateSun = energyPerTrx ? Math.max(TRX, Math.ceil((ENERGY_PER_SWEEP * 1.1) / energyPerTrx) * TRX) : Infinity;
         const useEnergy = acc.activated && delegatable >= delegateSun;
@@ -252,7 +253,8 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
     },
     async recon() {
       const rows = await db.query('select * from recon order by day desc limit 30');
-      const per = await db.query(`select m.id, m.name, coalesce((select sum(amount) from deposits d where d.merchant_id = m.id and d.result = 'credited'), 0)::bigint deposits,
+      // 商户收款合计按账本（ledger 的 deposit 记录）计算，客户合计按客户表：两边来自不同的记录，对不上才说明有问题（F7）
+      const per = await db.query(`select m.id, m.name, coalesce((select sum(amount) from ledger l where l.merchant_id = m.id and l.type = 'deposit'), 0)::bigint deposits,
         coalesce((select sum(total) from customers c where c.merchant_id = m.id), 0)::bigint customers from merchants m order by m.created_at`);
       return { days: rows.map((r) => ({ day: iso(r.day).slice(0, 10), balances: r.balances, chain: r.chain, fees: r.fees, diff: r.diff, detail: r.detail })), merchants: per.map((p) => ({ id: p.id, name: p.name, deposits_total: p.deposits, customers_total: p.customers, ok: p.deposits === p.customers })) };
     },

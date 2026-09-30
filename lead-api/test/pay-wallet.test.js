@@ -127,3 +127,30 @@ test('钱包初始化：只接受 xpub，第 1 个地址要对得上，只能初
   assert.equal((await call('wallet-init', { xpub: XPUB, first_address: addressOfPrivateKey(priv(0)), code: '1' })).status, 200);
   assert.equal((await call('wallet-init', { xpub: XPUB, first_address: addressOfPrivateKey(priv(0)), code: '1' })).body.error.code, 'already_initialized');
 });
+
+test('归集只转账本上记录过的金额（F6）：链上多出来的还没扫到的到账先不动', async () => {
+  const { db, tron, call } = await setup();
+  const a = await db.tx((t) => core.ensureCustomer(t, 'm1', 'f6'));
+  await core.recordDeposit(db, { txid: 'f6'.padEnd(64, '0'), logIndex: 0, block: 1, to: a.address, amount: 100 * U, time: new Date() });
+  tron.accounts.set(a.address, { activated: true, trx: 0, trc20: { [tron.contract]: 130 * U } }); // 链上多了 30，还没扫到
+  const plan = (await call('sweep-plan', { addresses: [a.address], to: 'hot' })).body;
+  assert.equal(plan.items[0].amount, '100.00');
+});
+
+test('按商户核对：商户收款合计按账本计算，客户合计被改动时能发现（F7）', async () => {
+  const { db, call } = await setup();
+  const a = await db.tx((t) => core.ensureCustomer(t, 'm1', 'f7'));
+  await core.recordDeposit(db, { txid: 'f7'.padEnd(64, '0'), logIndex: 0, block: 1, to: a.address, amount: 10 * U, time: new Date() });
+  let m = (await call('recon')).body.merchants[0];
+  assert.deepEqual([m.deposits_total, m.customers_total, m.ok], ['10.00', '10.00', true]);
+  await db.query(`update customers set total = total + 1 where customer_id = 'f7'`);
+  m = (await call('recon')).body.merchants[0];
+  assert.equal(m.ok, false);
+});
+
+test('同一笔交易里两次低于 1 USDT 的转账，异常到账各记一条（F8）', async () => {
+  const { db } = await setup();
+  const a = await db.tx((t) => core.ensureCustomer(t, 'm1', 'f8'));
+  for (const i of [0, 1]) await core.recordDeposit(db, { txid: 'f8'.padEnd(64, '0'), logIndex: i, block: 1, to: a.address, amount: 1, time: new Date() });
+  assert.equal((await db.query(`select count(*)::int n from anomalies where type = 'below_min'`))[0].n, 2);
+});
