@@ -15,6 +15,9 @@ export interface OrderFull extends OrderItem { address: string; pay_url: string;
 export interface Wd { withdrawal_no: string; kind: 'payout' | 'cashout'; customer_id: string | null; to: string; amount: Amount; fee: Amount; status: string; txid: string | null; reason: string | null; source: 'web' | 'api'; created_at: string }
 export interface Led { id: string; type: M.LedgerType; amount: Amount; available_after: Amount; ref: string; customer_id: string | null; created_at: string }
 export interface Cb { id: string; event: string; ref: string; status: 'pending' | 'ok' | 'failed'; attempts: number; last_code: number | null; next_at: string | null; created_at: string }
+/** 列表最多取这么多条；更早的记录用导出查看 */
+export const MAX_ROWS = 1000;
+export type List<T> = T[] & { truncated?: boolean };
 export interface ApiInfo { api_key: string | null; has_secret: boolean; callback_url: string; ip_whitelist: string[]; order_mode: Mode }
 
 /** 金额转成整数（最小单位），负数也支持 */
@@ -34,7 +37,7 @@ export interface MerchantData {
   setupBegin(token: string, password: string): Promise<{ qr: string; secret: string }>;
   setupConfirm(token: string, code: string): Promise<void>;
   overview(): Promise<{ available: Amount; frozen: Amount; today: Amount; today_count: number; today_fees: Amount; open_orders: number; unmatched: Amount; unmatched_count: number; pending_withdrawals: number; recent: Dep[] }>;
-  customers(q: string): Promise<Cust[]>;
+  customers(q: string, onePage?: boolean): Promise<Cust[]>;
   customer(id: string, days: number): Promise<{ customer: Cust; stats: { total: Amount; count: number; fees: Amount; unmatched: Amount }; orders: OrderItem[]; deposits: Dep[]; payouts: { withdrawal_no: string; amount: Amount; status: string; created_at: string }[] }>;
   saveCustomer(b: { customer_id: string; name?: string; email?: string; remark?: string }, create?: boolean): Promise<Cust>;
   orders(status: string, customerId: string): Promise<OrderItem[]>;
@@ -65,6 +68,15 @@ export function realData(): MerchantData {
     return data;
   };
   const q = (o: Record<string, string | number | undefined>) => Object.entries(o).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `&${k}=${encodeURIComponent(String(v))}`).join('');
+  /** 列表接口一页 50 到 100 条：一页一页取完（最多 MAX_ROWS 条），页面上再分段显示。取不完时标记 truncated */
+  const all = async <T,>(a: string, qs = '', pages = MAX_ROWS): Promise<List<T>> => {
+    const items: T[] = []; let cursor: string | undefined;
+    do {
+      const r = await call(a, undefined, qs + q({ cursor }));
+      items.push(...r.items); cursor = r.next_cursor || undefined;
+    } while (cursor && items.length < pages);
+    return Object.assign(items, { truncated: !!cursor });
+  };
   return {
     proto: false,
     me: () => call('me'),
@@ -73,24 +85,24 @@ export function realData(): MerchantData {
     setupBegin: (token, password) => call('setup-begin', { token, password }),
     setupConfirm: async (token, code) => { await call('setup-confirm', { token, code }); },
     overview: () => call('overview'),
-    customers: async (s) => (await call('customers', undefined, q({ q: s }))).items,
+    customers: async (s, onePage) => (onePage ? (await call('customers', undefined, q({ q: s }))).items : all('customers', q({ q: s }))),
     customer: (id, days) => call('customer', undefined, q({ customer_id: id, days })),
     saveCustomer: (b) => call('customer-save', b),
-    orders: async (status, customerId) => (await call('orders', undefined, q({ status, customer_id: customerId }))).items,
+    orders: (status, customerId) => all('orders', q({ status, customer_id: customerId })),
     order: (id) => call('order', undefined, q({ order_no: id })),
     createOrder: (b) => call('order-create', b),
     match: async (orderNo, depositId, on) => { await call(on ? 'match' : 'unmatch', { order_no: orderNo, deposit_id: depositId }); },
-    deposits: async (customerId, only) => (await call('deposits', undefined, q({ customer_id: customerId, matched: only ? 'false' : '' }))).items,
-    ledger: async (customerId) => (await call('ledger', undefined, q({ customer_id: customerId }))).items,
+    deposits: (customerId, only) => all('deposits', q({ customer_id: customerId, matched: only ? 'false' : '' })),
+    ledger: (customerId) => all('ledger', q({ customer_id: customerId })),
     withdraw: (b) => call('withdraw', b),
-    withdrawals: async () => (await call('withdrawals')).items,
+    withdrawals: () => all('withdrawals'),
     cancelWithdrawal: async (id) => { await call('withdraw-cancel', { withdrawal_no: id }); },
     api: () => call('api'),
     regenerate: (code) => call('api-regen', { code }),
     saveCallback: async (url) => { await call('callback-save', { callback_url: url }); },
     saveIps: async (ips) => { await call('ip-save', { ip_whitelist: ips }); },
     testCallback: async () => { await call('callback-test', {}); },
-    callbacks: async () => (await call('callbacks')).items,
+    callbacks: () => all('callbacks'),
     resend: async (id) => { await call('callback-resend', { id }); },
     exportUrl: (type, customerId) => `/api/merchant/?a=export&type=${type === 'customer' ? 'deposits' : type}${customerId ? `&customer_id=${encodeURIComponent(customerId)}` : ''}`,
   };
