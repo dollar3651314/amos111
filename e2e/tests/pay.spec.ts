@@ -51,12 +51,34 @@ async function api(page: Page, method: 'GET' | 'POST', path: string, body?: unkn
 }
 async function adminOk(page: Page) { await page.click('[data-pdialog-ok]'); }
 
+// 金额全局检查（BUG-P9、P10、P11）：接口里的金额一律是字符串（例如 "20.00"）。数据库里存的是 0.000001 USDT 为单位的整数，
+// 哪个字段漏了转换，页面就会把它当成 USDT 显示，放大 100 万倍。这里记录每个收付款接口的返回：
+// 任何不在"数量类字段"名单里、却 ≥ 1,000,000 的整数都算漏转换（测试里的金额都 ≥ 1 USDT，漏转换时一定 ≥ 1,000,000）
+const COUNT_KEYS = new Set(['count', 'customers', 'attempts', 'last_code', 'index', 'energy_left', 'energy_per_sweep', 'left', 'limit', 'per_sweep', 'db_bytes', 'db_limit_bytes', 'ms', 'age_s', 'payout_count', 'checked', 'address_count', 'stage', 'cursor', 'number', 'time', 'at_ms',
+  // 设置项：手续费规则（ppm、fixed、min）和订单模式（low、high）按内部单位传给页面，页面和服务器用同一份计算代码（lib/money.ts）
+  'ppm', 'fixed', 'min', 'low', 'high']);
+const rawAmounts: string[] = [];
+function scanAmounts(url: string, v: unknown, path = '') {
+  if (Array.isArray(v)) v.forEach((x, i) => scanAmounts(url, x, `${path}[${i}]`));
+  else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) {
+    if (typeof x === 'number' && Number.isInteger(x) && Math.abs(x) >= 1_000_000 && !COUNT_KEYS.has(k)) rawAmounts.push(`${url.replace(B, '')} ${path}.${k} = ${x}`);
+    else scanAmounts(url, x, `${path}.${k}`);
+  }
+}
+function watchAmounts(page: Page) {
+  page.on('response', async (r) => {
+    if (!/\/api\/(wallet|merchant|v1|pay)\//.test(r.url()) || !(r.headers()['content-type'] || '').includes('json')) return;
+    try { scanAmounts(r.url(), await r.json()); } catch { /* 非 JSON */ }
+  });
+}
+
 test.describe.serial('TC-P v6 收付款（正式接口）', () => {
   // 同一个动态码不能用两次，测试里有时要等下一个 30 秒的动态码
   test.setTimeout(120_000);
   test.beforeAll(async ({ browser }) => {
     actx = await browser.newContext({ baseURL: B }); admin = await actx.newPage();
     mctx = await browser.newContext({ baseURL: B }); merchant = await mctx.newPage();
+    watchAmounts(admin); watchAmounts(merchant);
   });
   test.afterAll(async () => { await actx.close(); await mctx.close(); });
 
@@ -137,6 +159,45 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await pay.goto(`/zh/pay/${orderNo}/`);
     await expect(pay.locator('[data-pay-result-title]')).toHaveText('付款成功');
     await pay.close();
+  });
+
+  test('TC-P09 创建订单的客户选择：按编号、名称、邮箱模糊搜索；选中已有客户带出名称和邮箱；可以新建客户', async () => {
+    const saved = await merchant.evaluate(async () => (await fetch('/api/merchant/?a=customer-save', { method: 'POST', headers: { 'content-type': 'application/json', 'x-qc-csrf': '1' }, body: JSON.stringify({ customer_id: 'vip_77', name: 'Harbor Trading', email: 'Ops@Harbor.example' }) })).status);
+    expect(saved).toBe(200);
+    await merchant.click('[data-mtab="orders"]');
+    await merchant.click('[data-mpanel="orders"] .toolbar .btn-primary');
+    const input = merchant.locator('#mo-cust'), list = merchant.locator('#mo-cust-list');
+    // 按邮箱搜索（邮箱加密保存，服务端解密后比对），不区分大小写
+    await input.fill('ops@harbor');
+    await expect(list.locator('.picker-opt').first()).toContainText('vip_77');
+    // 列表就在输入框正下方（不再跑偏）
+    const ib = (await input.boundingBox())!, lb = (await list.boundingBox())!;
+    expect(Math.abs(lb.x - ib.x)).toBeLessThan(2);
+    expect(lb.y - (ib.y + ib.height)).toBeGreaterThanOrEqual(0);
+    expect(lb.y - (ib.y + ib.height)).toBeLessThan(10);
+    // 按名称搜索，用键盘选中
+    await input.fill('harbor trad');
+    await expect(list.locator('.picker-opt').first()).toContainText('vip_77');
+    await input.press('ArrowDown'); await input.press('Enter');
+    await expect(input).toHaveValue('vip_77');
+    await expect(merchant.locator('#mo-cname')).toHaveValue('Harbor Trading');
+    await expect(merchant.locator('#mo-cemail')).toHaveValue('Ops@Harbor.example');
+    await expect(merchant.locator('#mo-cname')).toHaveJSProperty('readOnly', true);
+    // 按编号搜索；列表显示已有客户 buyer_1（TC-P03 创建）
+    await input.fill('buyer');
+    await expect(list.locator('.picker-opt').first()).toContainText('buyer_1');
+    // 新的编号：列表最后一项是"新建客户"；名称和邮箱清空、可以填写
+    await input.fill('brand_new_1');
+    await expect(list.locator('.picker-new')).toContainText('brand_new_1');
+    await list.locator('.picker-new').click();
+    await expect(merchant.locator('#mo-cname')).toHaveValue('');
+    await expect(merchant.locator('#mo-cname')).toHaveJSProperty('readOnly', false);
+    await expect(merchant.locator('[data-mdialog]')).toContainText('新客户');
+    // Esc 只关闭列表，不关闭弹窗
+    await input.fill('brand'); await expect(list).toBeVisible(); await input.press('Escape');
+    await expect(list).toBeHidden();
+    await expect(merchant.locator('[data-mdialog]')).toBeVisible();
+    await merchant.keyboard.press('Escape');
   });
 
   test('TC-P04 开放 API：签名、先到账后建单、商户隔离（AC-P11 ③、P20）', async () => {
@@ -220,16 +281,19 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
   test('TC-P08 所有弹窗：在弹窗上滚动鼠标滚轮，背景页面不跟着滚动（BUG-P8）', async () => {
     for (const [page, path] of [[admin, '/admin/'], [merchant, '/merchant/']] as const) {
       await page.goto(path);
+      await page.waitForLoadState('networkidle'); // 页面自己的加载（可能会打开或关闭弹窗）结束后再测
       const dialogs = await page.locator('dialog').count();
       expect(dialogs).toBeGreaterThan(0);
       for (let i = 0; i < dialogs; i++) {
         await page.evaluate((i) => {
+          document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach((d) => d.close()); // 每次只打开要测的这一个
           document.body.style.minHeight = '5000px'; // 保证背景页面可以滚动
           window.scrollTo({ top: 100, behavior: 'instant' }); // 页面开启了平滑滚动，这里要立即到位
           const d = document.querySelectorAll('dialog')[i] as HTMLDialogElement;
           d.style.minHeight = '200px';
           d.showModal();
         }, i);
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(100);
         const before = await page.evaluate(() => window.scrollY);
         const box = (await page.locator('dialog').nth(i).boundingBox())!;
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -240,6 +304,46 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
         await page.evaluate((i) => { (document.querySelectorAll('dialog')[i] as HTMLDialogElement).close(); document.body.style.minHeight = ''; }, i);
       }
     }
+  });
+
+  test('TC-P10 所有后台页面的金额：逐个打开运营后台和商户后台的每个页面，接口里没有漏转换的金额（BUG-P11）', async () => {
+    // 先准备数据：新客户收到一笔 20.000001 USDT（未归集），热钱包有 USDT 和 TRX（钱包设置、提币审核会显示）
+    const c = await api(merchant, 'POST', 'customers/', { customer_id: 'amount_check_1' });
+    expect(c.status).toBe(200);
+    await fake(admin, 'tron/pay', { to: c.body.address, amount: 20 * U + 1 });
+    await fake(admin, 'tron/account', { address: 'TCLBgkbfVkJroVBJVqBEsxtPNQEQMTQCLQ', account: { activated: true, trx: 500 * U, trc20: { TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf: 3000 * U } } });
+    await tick(admin);
+    await fake(admin, 'daily');
+    await admin.goto('/admin/');
+    for (const tab of ['p-merchants', 'p-customers', 'p-sweep', 'p-withdrawals', 'p-anomalies', 'p-recon', 'p-wallet', 'p-status']) {
+      await admin.click(`[data-tab="${tab}"]`);
+      await expect(admin.locator(`[data-panel="${tab}"] .alert`)).toHaveCount(0);
+      await admin.waitForLoadState('networkidle');
+    }
+    // 客户页的"未归集"、对账的合计，显示的是正常的金额（不是放大 100 万倍）
+    await admin.click('[data-tab="p-customers"]');
+    await expect(admin.locator('[data-panel="p-customers"]')).toContainText('20.000001');
+    await expect(admin.locator('[data-panel="p-customers"]')).not.toContainText(/\d{1,3}(,\d{3}){2,}\.\d{2}/);
+    await admin.click('[data-tab="p-wallet"]');
+    await expect(admin.locator('[data-panel="p-wallet"]')).toContainText('3,000.00');
+    await admin.click('[data-tab="p-recon"]');
+    await expect(admin.locator('[data-panel="p-recon"]')).not.toContainText(/\d{1,3}(,\d{3}){2,}\.\d{2}/);
+    // 立即对账（测试环境没有每天的自动任务）
+    await admin.locator('[data-panel="p-recon"] .toolbar button', { hasText: '立即对账' }).click();
+    await expect(admin.locator('[data-toast]')).toContainText('对账完成');
+    await expect(admin.locator('[data-panel="p-recon"] tbody').first()).toContainText(new Date().toISOString().slice(0, 10));
+    // 归集：地址都低于筛选金额时，说明有多少个地址被筛掉了
+    await admin.click('[data-tab="p-sweep"]');
+    await admin.locator('[data-panel="p-sweep"] .toolbar input').fill('100000');
+    await admin.locator('[data-panel="p-sweep"] .toolbar input').press('Enter');
+    await admin.locator('[data-panel="p-sweep"] .toolbar input').blur();
+    await expect(admin.locator('[data-panel="p-sweep"]')).toContainText(/有 \d+ 个地址低于 100000 USDT/);
+    await merchant.goto('/merchant/');
+    for (const tab of ['overview', 'customers', 'orders', 'transactions', 'withdraw', 'api', 'callbacks']) {
+      await merchant.click(`[data-mtab="${tab}"]`);
+      await merchant.waitForLoadState('networkidle');
+    }
+    expect(rawAmounts, '接口返回了没有转换的金额（整数）').toEqual([]);
   });
 
   test('TC-P07 安全：数据库和服务器日志里没有助记词和私钥（AC-P11 ①）', async () => {

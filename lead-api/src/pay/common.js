@@ -13,7 +13,10 @@ export function derivePayKeys(appSecret) {
 
 /** 对外的金额一律是字符串，例如 "100.50"（开发者文档） */
 export const amt = (u) => (u === null || u === undefined ? null : fmtUsdt(u).replace(/,/g, ''));
-const AMOUNT_KEYS = new Set(['amount', 'matched', 'fee', 'credited', 'available', 'frozen', 'total', 'fees', 'unmatched', 'balance', 'available_after', 'frozen_after', 'payouts']);
+const AMOUNT_KEYS = new Set(['amount', 'matched', 'fee', 'credited', 'available', 'frozen', 'total', 'fees', 'unmatched', 'balance', 'available_after', 'frozen_after', 'payouts',
+  // 后台接口（BUG-P11：这些字段之前漏了，页面把 0.000001 USDT 为单位的整数当成 USDT 显示，放大了 100 万倍）
+  'onchain', 'balances', 'chain', 'diff', 'usdt', 'trx', 'burn_trx', 'deposits_total', 'customers_total', 'addresses', 'hot', 'cold', 'today', 'today_fees']);
+// 注意：只有值是数字时才转换，所以 hot、cold 作为地址（字符串）时不受影响；数量类的字段不要用上面的名字（例如 total 是金额，地址数量用 address_count）
 /** 把对象里的金额字段（整数）转成字符串 */
 export function money(v) {
   if (Array.isArray(v)) return v.map(money);

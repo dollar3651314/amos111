@@ -3,7 +3,7 @@
 // - 原型模式（开发分支的预览）：模拟数据
 import copy from '../i18n/merchant.json';
 import { calcFee, describeFee, fmtUsdt, isTronAddress, parseUsdt, shortAddr } from '../lib/money';
-import { realData, protoData, units, ApiErr, type Amount, type Dep, type OrderFull, type Wd, type Me } from './merchant-data';
+import { realData, protoData, units, ApiErr, type Amount, type Cust, type Dep, type OrderFull, type Wd, type Me } from './merchant-data';
 import * as Mock from './v6-mock';
 import { copyBtn, field, fieldErr, fmtTime, h, makeDialog, mono, qrDataUrl, stat, status, table, toast, tpl } from './ui';
 
@@ -248,15 +248,77 @@ async function orderDetail(id: string) {
   try { await draw(); } catch (e) { say(errText(e)); return; }
   dialog(tpl(cd.title, { id }), box, c.common.confirm, () => { refresh(); });
 }
+// ---------- 客户选择框（创建订单、代付共用） ----------
+// 按客户编号、名称、邮箱模糊搜索（服务端解密邮箱后比对）；选中已有客户时回调里带着客户资料，输入新的编号时 cust 为 null。
+// 不用浏览器自带的 datalist：它在弹窗里的位置由浏览器决定，会跑偏，也不能在选中后带出其他字段。
+type Picked = { id: string; cust: Cust | null };
+function customerPicker(id: string, onChange: (p: Picked) => void) {
+  const cp = c.picker;
+  const input = h('input', { id, autocomplete: 'off', spellcheck: false, role: 'combobox', 'aria-autocomplete': 'list', 'aria-expanded': 'false', 'aria-controls': `${id}-list`, placeholder: cp.placeholder }) as HTMLInputElement;
+  const list = h('ul', { id: `${id}-list`, class: 'picker-list', role: 'listbox' });
+  list.hidden = true;
+  let items: Cust[] = [], active = -1, seq = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  const opts = () => [...list.querySelectorAll<HTMLElement>('.picker-opt')];
+  const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+  const choose = (i: number) => {
+    const q = input.value.trim();
+    if (i < items.length) { input.value = items[i].customer_id; onChange({ id: items[i].customer_id, cust: items[i] }); } else onChange({ id: q, cust: null });
+    close();
+  };
+  const mark = () => opts().forEach((o, i) => o.setAttribute('aria-selected', String(i === active)));
+  const draw = (q: string) => {
+    const rows: HTMLElement[] = items.map((x, i) => h('li', { role: 'option', class: 'picker-opt', onmousedown: (e: Event) => { e.preventDefault(); choose(i); } },
+      h('b', {}, x.customer_id), [x.name, x.email].some(Boolean) ? h('span', { class: 'muted' }, [x.name, x.email].filter(Boolean).join(' · ')) : null));
+    if (q && CUST_RE.test(q) && !items.some((x) => x.customer_id === q)) rows.push(h('li', { role: 'option', class: 'picker-opt picker-new', onmousedown: (e: Event) => { e.preventDefault(); choose(items.length); } }, tpl(cp.newCustomer, { id: q })));
+    if (!rows.length) rows.push(h('li', { class: 'picker-empty muted' }, q ? cp.none : cp.empty));
+    list.replaceChildren(...rows);
+    list.hidden = false; input.setAttribute('aria-expanded', 'true');
+  };
+  const search = async () => {
+    const q = input.value.trim(), my = ++seq;
+    let r: Cust[] = [];
+    try { r = (await D.customers(q)).slice(0, 8); } catch { /* 搜索失败时只显示"新建" */ }
+    if (my !== seq || document.activeElement !== input) return;
+    items = r; active = -1; draw(q);
+    const exact = r.find((x) => x.customer_id === q);
+    onChange({ id: q, cust: exact || null }); // 手动输入了完整的已有编号，也按已有客户处理
+  };
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 200); });
+  input.addEventListener('focus', () => { search(); });
+  input.addEventListener('blur', () => setTimeout(close, 120));
+  input.addEventListener('keydown', (e) => {
+    if (list.hidden) return;
+    const n = opts().length;
+    if (e.key === 'ArrowDown' && n) { e.preventDefault(); active = (active + 1) % n; mark(); }
+    else if (e.key === 'ArrowUp' && n) { e.preventDefault(); active = (active - 1 + n) % n; mark(); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(active); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } // 只关闭列表，不关闭弹窗
+  });
+  return { input, wrap: h('div', { class: 'picker' }, input, list) };
+}
+/** field() 会把 id 设在传入的元素上：选择框的 id 要留在输入框上 */
+function pickerField(id: string, label: string, picker: { input: HTMLInputElement; wrap: HTMLElement }, hint?: string) {
+  const f = field(id, label, picker.wrap, hint);
+  picker.wrap.removeAttribute('id'); picker.input.id = id;
+  return f;
+}
+
 async function createOrder() {
   const cc = c.orders.create;
-  const custs = await D.customers('').catch(() => []);
-  const cust = h('input', { autocomplete: 'off', list: 'mo-cust-list' }) as HTMLInputElement;
-  const dl = h('datalist', { id: 'mo-cust-list' }, ...custs.map((x) => h('option', { value: x.customer_id }, x.name)));
   const cname = h('input', { autocomplete: 'off' }) as HTMLInputElement, cemail = h('input', { type: 'email', autocomplete: 'off' }) as HTMLInputElement;
+  const who = h('p', { class: 'hint m0' });
+  let wasExisting = false;
+  const picker = customerPicker('mo-cust', ({ id, cust: x }) => {
+    // 已有客户：带出名称和邮箱，只读（资料在"客户"页面修改）；新客户：可以填写
+    if (x) { cname.value = x.name; cemail.value = x.email; } else if (wasExisting) { cname.value = ''; cemail.value = ''; }
+    wasExisting = !!x;
+    cname.readOnly = cemail.readOnly = !!x;
+    who.textContent = !id ? '' : x ? c.picker.existing : CUST_RE.test(id) ? c.picker.isNew : '';
+  });
+  const cust = picker.input;
   const no = h('input', { autocomplete: 'off', value: `ORDER-${Date.now().toString(36).toUpperCase()}` }) as HTMLInputElement;
   const amt = h('input', { inputmode: 'decimal', autocomplete: 'off' }) as HTMLInputElement;
-  const body = h('div', { class: 'stack' }, field('mo-cust', cc.customer, cust, cc.customerHint), dl,
+  const body = h('div', { class: 'stack' }, pickerField('mo-cust', cc.customer, picker, cc.customerHint), who,
     h('div', { class: 'fgrid' }, field('mo-cname', `${cc.customerName} (${c.common.optional})`, cname), field('mo-cemail', `${cc.customerEmail} (${c.common.optional})`, cemail)),
     field('mo-no', cc.merchantNo, no, cc.merchantNoHint), field('mo-amt', cc.amount, amt), h('p', { class: 'hint muted m0' }, settingsNote()));
   dialog(cc.title, body, cc.submit, async () => {
@@ -266,7 +328,8 @@ async function createOrder() {
     bad = fieldErr(amt, parseUsdt(amt.value) ? null : cc.errAmount) || bad;
     if (bad) return false;
     let o: OrderFull;
-    try { o = await D.createOrder({ customer_id: cid, customer_name: cname.value.trim() || undefined, customer_email: cemail.value.trim() || undefined, merchant_order_no: no.value.trim(), amount: amt.value.replace(/[,\s]/g, '') }); }
+    // 已有客户不再传名称和邮箱（服务端也只在新建客户时使用）
+    try { o = await D.createOrder({ customer_id: cid, customer_name: (!cname.readOnly && cname.value.trim()) || undefined, customer_email: (!cemail.readOnly && cemail.value.trim()) || undefined, merchant_order_no: no.value.trim(), amount: amt.value.replace(/[,\s]/g, '') }); }
     catch (e) {
       const f = (e as ApiErr).field;
       fieldErr(f === 'merchant_order_no' ? no : f === 'customer_email' ? cemail : f === 'customer_id' ? cust : amt, (e as ApiErr).code === 'duplicate_merchant_order_no' ? cc.errDup : errText(e));
@@ -309,19 +372,20 @@ const WD_CLS: Record<string, string> = { pending: 'submitted', rejected: 'reject
 const wdBadge = (s: string) => status(WD_CLS[s] || 'submitted', (c.wd.status as Record<string, string>)[s] || s);
 render.withdraw = async (p) => {
   const cw = c.wd;
-  const [ov, list, custs] = await Promise.all([D.overview(), D.withdrawals(), D.customers('').catch(() => [])]);
+  const [ov, list] = await Promise.all([D.overview(), D.withdrawals()]);
   const available = units(ov.available);
   const kindPayout = h('input', { type: 'radio', name: 'wd-kind', value: 'payout', checked: true }) as HTMLInputElement;
   const kindCash = h('input', { type: 'radio', name: 'wd-kind', value: 'cashout' }) as HTMLInputElement;
   const to = h('input', { autocomplete: 'off', spellcheck: false, class: 'mono-input', placeholder: 'T…' }) as HTMLInputElement;
-  const custIn = h('input', { autocomplete: 'off', list: 'mw-cust-list' }) as HTMLInputElement;
-  const dl = h('datalist', { id: 'mw-cust-list' }, ...custs.map((x) => h('option', { value: x.customer_id }, x.name)));
+  const custWho = h('p', { class: 'hint m0' });
+  const custPicker = customerPicker('mw-cust', ({ id, cust: x }) => { custWho.textContent = !id ? '' : x ? [x.customer_id, x.name, x.email].filter(Boolean).join(' · ') : CUST_RE.test(id) ? c.picker.isNew : ''; });
+  const custIn = custPicker.input;
   const wallets = me.cashout_wallets;
   const sel = h('select', {}, ...wallets.map((w) => h('option', { value: w }, w))) as HTMLSelectElement;
   const amt = h('input', { inputmode: 'decimal', autocomplete: 'off' }) as HTMLInputElement;
   const code = h('input', { inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '6' }) as HTMLInputElement;
   const toField = field('mw-to', cw.to, to);
-  const custField = field('mw-cust', cw.customer, custIn, cw.customerHint);
+  const custField = h('div', { class: 'stack' }, pickerField('mw-cust', cw.customer, custPicker, cw.customerHint), custWho);
   const selField = wallets.length ? field('mw-sel', cw.cashoutWallet, sel) : h('div', { class: 'f' }, h('span', { class: 'lbl' }, cw.cashoutWallet), h('p', { class: 'alert m0' }, cw.noWallet));
   selField.hidden = true;
   const fee = h('b'), freeze = h('b'), after = h('b');
@@ -341,7 +405,7 @@ render.withdraw = async (p) => {
   const submit = h('button', { class: 'btn btn-primary', type: 'submit' }, cw.submit) as HTMLButtonElement;
   const form = h('form', { class: 'card form-card wd-form', novalidate: true },
     h('div', { class: 'f' }, h('span', { class: 'lbl' }, cw.kind), h('div', { class: 'choices' }, h('label', {}, kindPayout, cw.kindPayout), h('label', {}, kindCash, cw.kindCashout))),
-    toField, custField, dl, selField, field('mw-amt', cw.amount, amt), summary, field('mw-code', cw.code, code), submit);
+    toField, custField, selField, field('mw-amt', cw.amount, amt), summary, field('mw-code', cw.code, code), submit);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const cash = kindCash.checked;

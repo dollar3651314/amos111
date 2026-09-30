@@ -298,7 +298,11 @@ render.sweep = async (p) => {
       cb.addEventListener('click', (e) => e.stopPropagation());
       cb.addEventListener('change', () => { cb.checked ? swSel.add(x.address) : swSel.delete(x.address); render.sweep(p); });
       return [cb, x.merchant, mono(x.customer_id), mono(shortAddr(x.address), x.address), h('b', {}, usd(x.balance)), t(x.last_payment_at), x.activated ? '' : h('span', { class: 'pill' }, '首次，含激活')];
-    }), '暂无需要归集的地址'),
+    }), (() => {
+      // 有地址只是低于筛选金额：说清楚，免得以为没有钱可以归集
+      const below = r.items.filter((x: any) => u(x.balance) < min);
+      return below.length ? `有 ${below.length} 个地址低于 ${swMin} USDT（合计 ${fmtUsdt(below.reduce((s: number, x: any) => s + u(x.balance), 0))} USDT），调低上面的"金额 ≥"就能看到。每次归集都要花费能量或 TRX，金额太小不划算。` : '暂无需要归集的地址';
+    })()),
     h('p', { class: 'hint muted' }, '点"签名并归集"后，服务器向链上核实每个地址的实际余额，并根据热钱包的能量决定"借出能量"还是"转 TRX 燃烧"；签名框里会逐笔显示。'),
     h('div', { class: 'sumbar' },
       h('span', {}, '已选 ', h('b', {}, String(chosen.length)), ' 个地址 · 合计约 ', h('b', {}, `${fmtUsdt(chosen.reduce((s: number, x: any) => s + u(x.balance), 0))} USDT`)),
@@ -330,11 +334,17 @@ render.anomalies = async (p) => {
 };
 render.recon = async (p) => {
   const r = await call('recon');
-  p.replaceChildren(toolbar('对账'), h('p', { class: 'hint muted' }, '每天核对一次：链上实际持有的 USDT（客户地址 + 热钱包 + 冷钱包）应该等于商户余额之和 + 平台收取的手续费 + 低于 1 USDT 没有入账的钱。你从热钱包或冷钱包转出利润后，差额会是负数，属于正常。'),
+  // 立即对账：和每天的自动任务相同（对账、检查其他代币、提醒）。测试环境没有每天的自动任务，要用这个按钮
+  const run = h('button', { type: 'button', class: 'btn btn-outline btn-sm', onclick: async () => {
+    run.disabled = true; run.textContent = '正在对账…';
+    try { await call('recon-run', {}); say('对账完成'); } catch (e) { say(errText(e)); }
+    render.recon(p); counts();
+  } }, '立即对账') as HTMLButtonElement;
+  p.replaceChildren(toolbar('对账', run), h('p', { class: 'hint muted' }, '每天核对一次：链上实际持有的 USDT（客户地址 + 热钱包 + 冷钱包）应该等于商户余额之和 + 平台收取的手续费 + 低于 1 USDT 没有入账的钱。你从热钱包或冷钱包转出利润后，差额会是负数，属于正常。'),
     table(['日期', '商户余额合计', '链上合计', '手续费和未入账', '差额', '结果'], r.days.map((d: any) => [d.day, usd(d.balances), usd(d.chain), usd(d.fees), u(d.diff) ? h('b', { class: 'neg' }, usd(d.diff)) : '0.00',
-      !d.detail.complete ? status('submitted', `只查了 ${d.detail.checked}/${d.detail.total} 个地址`) : u(d.diff) ? status('needs_info', '不一致') : status('approved', '一致')]), '暂无对账记录（每天自动对账一次）'),
+      !d.detail.complete ? status('submitted', `只查了 ${d.detail.checked}/${d.detail.address_count ?? '—'} 个地址`) : u(d.diff) ? status('needs_info', '不一致') : status('approved', '一致')]), '暂无对账记录（每天自动对账一次，也可以点右上角的"立即对账"）'),
     h('h2', { class: 'h-sm' }, '按商户核对客户合计'),
-    table(['商户', '商户收款合计', '客户收款合计', '结果'], r.merchants.map((m: any) => [m.name, usd(m.deposits), usd(m.customers), status(m.ok ? 'approved' : 'needs_info', m.ok ? '一致' : '不一致')]), '暂无'));
+    table(['商户', '商户收款合计', '客户收款合计', '结果'], r.merchants.map((m: any) => [m.name, usd(m.deposits_total), usd(m.customers_total), status(m.ok ? 'approved' : 'needs_info', m.ok ? '一致' : '不一致')]), '暂无'));
 };
 
 // ============ 钱包设置 ============
@@ -342,7 +352,7 @@ render.wallet = async (p) => {
   const w = await call('wallet');
   const acc = (x: any, name: string) => h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, name),
     x ? h('dl', { class: 'kv' }, h('dt', {}, '地址'), h('dd', {}, h('span', { class: 'copy-row' }, mono(x.address), copyBtn(() => x.address, '复制', '已复制', 'link-copy'), tronscan(x.address))),
-      h('dt', {}, 'USDT'), h('dd', {}, x.error ? '查询失败' : usd(x.usdt)), h('dt', {}, 'TRX'), h('dd', {}, x.error ? '查询失败' : fmtUsdt(Number(x.trx) || 0))) : h('p', { class: 'm0 muted' }, '没有配置（config/wallets.json）'));
+      h('dt', {}, 'USDT'), h('dd', {}, x.error ? '查询失败' : usd(x.usdt)), h('dt', {}, 'TRX'), h('dd', {}, x.error ? '查询失败' : usd(x.trx))) : h('p', { class: 'm0 muted' }, '没有配置（config/wallets.json）'));
   p.replaceChildren(
     toolbar('钱包设置', h('span', { class: 'muted' }, `网络：${w.network}`)),
     h('section', { class: 'card stack' }, h('h2', { class: 'h-sm m0' }, '主助记词（收款地址）'),

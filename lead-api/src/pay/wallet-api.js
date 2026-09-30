@@ -19,7 +19,7 @@ const VERIFY_TTL_MS = 5 * 60 * 1000; // 验证码通过后 5 分钟内必须提�
 const ENERGY_PER_SWEEP = 65_000; // 转 USDT 到已经有 USDT 的地址，大约需要的能量
 const USDT_FEE_LIMIT = 30 * TRX;
 
-export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyAdminCode, send, origin = '', listApproved = async () => [], notify, now = () => Date.now() }) {
+export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyAdminCode, send, origin = '', listApproved = async () => [], notify, runDaily = null, now = () => Date.now() }) {
   const hot = wallets.hot, cold = wallets.cold;
   const need = (cond, code, status = 422, field) => { if (!cond) throw new PayError(code, status, field); };
   const merchantRow = async (id) => { const m = await core.getMerchant(db, id); need(m, 'not_found', 404); return m; };
@@ -243,11 +243,18 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
       return { items: rows.map((a) => ({ id: String(a.id), type: a.type, merchant: a.merchant, customer_id: a.customer_id, address: a.address, amount: a.amount, ref: a.ref, handled: a.handled, created_at: iso(a.created_at) })) };
     },
     async 'anomaly-handle'(b, actor) { await db.query('update anomalies set handled = true where id = $1', [Number(b.id)]); await audit(db, actor, 'anomaly.handled', String(b.id)); return { ok: true }; },
+    /** 立即运行每日任务（对账、其他代币检查、提醒）：测试环境没有 Vercel 的定时任务，生产也可以手动补跑 */
+    async 'recon-run'(b, actor) {
+      need(runDaily, 'not_configured', 503);
+      await runDaily();
+      await audit(db, actor, 'recon.run', '');
+      return { ok: true };
+    },
     async recon() {
       const rows = await db.query('select * from recon order by day desc limit 30');
       const per = await db.query(`select m.id, m.name, coalesce((select sum(amount) from deposits d where d.merchant_id = m.id and d.result = 'credited'), 0)::bigint deposits,
         coalesce((select sum(total) from customers c where c.merchant_id = m.id), 0)::bigint customers from merchants m order by m.created_at`);
-      return { days: rows.map((r) => ({ day: iso(r.day).slice(0, 10), balances: r.balances, chain: r.chain, fees: r.fees, diff: r.diff, detail: r.detail })), merchants: per.map((p) => ({ id: p.id, name: p.name, deposits: p.deposits, customers: p.customers, ok: p.deposits === p.customers })) };
+      return { days: rows.map((r) => ({ day: iso(r.day).slice(0, 10), balances: r.balances, chain: r.chain, fees: r.fees, diff: r.diff, detail: r.detail })), merchants: per.map((p) => ({ id: p.id, name: p.name, deposits_total: p.deposits, customers_total: p.customers, ok: p.deposits === p.customers })) };
     },
 
     // ---------- 钱包 ----------

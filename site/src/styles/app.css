@@ -296,3 +296,13 @@ dialog[data-mdialog] .form-card > *, dialog[data-pdialog] .form-card > *, dialog
   .quota-row > span:last-child { text-align: left; }
 }
 .input-wide { max-width: 280px; min-width: 200px; }
+
+/* 客户选择框（商户后台：创建订单、代付） */
+.picker { position: relative; }
+.picker-list { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; margin: 0; padding: 4px; list-style: none; background: #fff; border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(11, 31, 58, 0.12); max-height: 264px; overflow-y: auto; }
+.picker-opt { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; cursor: pointer; min-width: 0; }
+.picker-opt span { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-opt:hover, .picker-opt[aria-selected="true"] { background: var(--bg-soft); }
+.picker-new { color: var(--accent); font-weight: 600; }
+.picker-empty { padding: 8px 10px; font-size: 0.9rem; }
+input[readonly] { background: var(--bg-soft); color: var(--text-muted); }
