@@ -9,7 +9,7 @@ const INT8 = 20;
 export async function createPgDb(url) {
   const { default: postgres } = await import('postgres');
   const sql = postgres(url, {
-    prepare: false, max: 3, idle_timeout: 20, connect_timeout: 10, onnotice: () => {},
+    prepare: false, max: MAX_CONN, idle_timeout: 20, connect_timeout: 10, onnotice: () => {},
     types: {
       bigint: { to: INT8, from: [INT8], serialize: (x) => String(x), parse: (x) => Number(x) },
       // 代码里 jsonb 参数一律先 JSON.stringify 再传入（和 PGlite 一致）。postgres.js 默认会对 json/jsonb 参数再 stringify 一次，
@@ -17,8 +17,22 @@ export async function createPgDb(url) {
       json: { to: 114, from: [114, 3802], serialize: (x) => (typeof x === 'string' ? x : JSON.stringify(x)), parse: (x) => JSON.parse(x) },
     },
   });
-  const wrap = (s) => ({ query: async (text, params = []) => [...(await s.unsafe(text, params))] });
-  return { ...wrap(sql), tx: (fn) => sql.begin((t) => fn(wrap(t))), end: () => sql.end({ timeout: 5 }) };
+  // 同时进行的查询不超过连接数（BUG-P22）：超过时 postgres.js 会把多个查询排在同一个连接上连续发送（pipelining），
+  // 经过 Supabase 的连接池（transaction 模式）时会卡住不返回，接口超时。这里在程序里排队，一个完成再发下一个
+  const wrap = (s, limit) => {
+    const run = gate(limit);
+    return { query: (text, params = []) => run(async () => [...(await s.unsafe(text, params))]) };
+  };
+  return { ...wrap(sql, MAX_CONN), tx: (fn) => sql.begin((t) => fn(wrap(t, 1))), end: () => sql.end({ timeout: 5 }) };
+}
+
+const MAX_CONN = 3;
+/** 并发闸门：最多 limit 个任务同时进行，其余排队 */
+export function gate(limit) {
+  let active = 0;
+  const queue = [];
+  const next = () => { if (active >= limit || !queue.length) return; active++; const { fn, ok, fail } = queue.shift(); fn().then(ok, fail).finally(() => { active--; next(); }); };
+  return (fn) => new Promise((ok, fail) => { queue.push({ fn, ok, fail }); next(); });
 }
 
 /** 本地和测试：内嵌 Postgres。dir 为空时只在内存里 */
