@@ -176,8 +176,13 @@ test('概览：代收、欠商户、平台资产、利润（现在能转走 / �
   await core.recordDeposit(db, { txid: 'ov'.padEnd(64, '1'), logIndex: 0, block: 2, to: a.address, amount: 1, time: new Date() }); // 灰尘
   tron.accounts.set(HOT, { activated: true, trx: 300 * U, trc20: { [tron.contract]: 50 * U } });
   tron.accounts.set(COLD, { activated: true, trx: 0, trc20: { [tron.contract]: 20 * U } });
-  const r = await call('overview');
-  assert.equal(r.status, 200);
+  // 两个接口：数据库统计、链上余额和利润；页面把两批数据合并显示
+  const both = async () => {
+    const [a1, a2] = [await call('overview'), await call('overview-chain')];
+    assert.equal(a1.status, 200); assert.equal(a2.status, 200);
+    return { funds: { ...a1.body.funds, ...a2.body.funds }, todo: { ...a1.body.todo, ...a2.body.todo }, sweep: { ...a1.body.sweep, ...a2.body.sweep }, periods: a1.body.periods };
+  };
+  const r = { body: await both() };
   const f = r.body.funds;
   assert.deepEqual([f.collected_total, f.owed_total, f.owed_available, f.owed_frozen], ['100.00', '99.00', '99.00', '0.00']);
   assert.deepEqual([f.unswept_total, f.hot_usdt, f.cold_usdt, f.assets_total], ['100.000001', '50.00', '20.00', '170.000001']);
@@ -188,6 +193,6 @@ test('概览：代收、欠商户、平台资产、利润（现在能转走 / �
   assert.deepEqual([r.body.periods.today.amount, r.body.periods.today.count, r.body.periods.d30.fees_in], ['100.00', 1, '1.00']);
   // 钱包里的钱多于欠商户时，多出来的部分现在就能转走
   tron.accounts.set(HOT, { activated: true, trx: 300 * U, trc20: { [tron.contract]: 150 * U } });
-  const f2 = (await call('overview')).body.funds;
+  const f2 = (await both()).funds;
   assert.deepEqual([f2.profit_total, f2.profit_now, f2.profit_after_sweep], ['171.000001', '71.00', '100.000001']);
 });

@@ -260,68 +260,80 @@ export function createWalletApi({ db, tron, keys, wallets, requireAdmin, verifyA
     },
 
     // ---------- 概览（登录后的首页）----------
-    /**
-     * 资金：代收总额、欠商户（可用 + 冻结）、平台资产（未归集 + 热钱包 + 冷钱包）、利润 = 平台资产 − 欠商户。
-     * "现在就能转走的利润" 按保守口径：热钱包 + 冷钱包 − 欠商户（不小于 0），转走后钱包里仍然够付所有商户的提币。
-     * 热钱包、冷钱包实时查链上；查不到时相关的数字返回 null，页面显示"—"。
-     */
+    // 分成两个接口，页面先显示框架，哪一部分回来就先填哪一部分（Amos：先把页面加载出来，超时就显示"—"）：
+    //   overview：只查数据库（统计、待处理、系统状态）
+    //   overview-chain：热钱包、冷钱包的链上余额和能量，据此算平台资产和利润；开户数据（待审核、待开通）
+    // 数据库查询一个接一个地执行，不同时发出（BUG-P22：同时发出十几个查询时，经过 Supabase 连接池会卡住，接口 504）
     async overview() {
+      const t0 = Date.now();
       const one = async (sql, p = []) => (await db.query(sql, p))[0];
       const DAY0 = `(date_trunc('day', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai')`; // 东八区的今天 0 点
-      const [col, bal, fin, fout, dust, uns, big] = await Promise.all([
-        one(`select coalesce(sum(amount), 0)::bigint v, count(*)::int n from deposits where result = 'credited'`),
-        one('select coalesce(sum(available), 0)::bigint available, coalesce(sum(frozen), 0)::bigint frozen from balances'),
-        one(`select coalesce(-sum(amount), 0)::bigint v from ledger where type = 'fee_in'`),
-        one(`select coalesce(-sum(amount), 0)::bigint v from ledger where type = 'fee_out'`),
-        one(`select coalesce(sum(amount), 0)::bigint v from deposits where result = 'below_min'`),
-        one('select coalesce(sum(onchain), 0)::bigint v, count(*) filter (where onchain > 0)::int n from customers'),
-        one(`select count(*)::int n, coalesce(sum(onchain), 0)::bigint v from customers where onchain >= $1`, [100 * 1_000_000]),
-      ]);
-      const chain = async (a) => { if (!a) return { usdt: 0, trx: 0 }; try { const acc = await tron.account(a); return { usdt: Number(acc.trc20[tron.contract]) || 0, trx: acc.trx }; } catch { return null; } };
-      const [h, c] = await Promise.all([chain(hot), chain(cold)]);
-      const owed = bal.available + bal.frozen;
-      const wallets = h && c ? h.usdt + c.usdt : null;
-      const assets = wallets === null ? null : uns.v + wallets;
+      const col = await one(`select coalesce(sum(amount), 0)::bigint v, count(*)::int n from deposits where result = 'credited'`);
+      const bal = await one('select coalesce(sum(available), 0)::bigint available, coalesce(sum(frozen), 0)::bigint frozen from balances');
+      const fin = await one(`select coalesce(-sum(amount), 0)::bigint v from ledger where type = 'fee_in'`);
+      const fout = await one(`select coalesce(-sum(amount), 0)::bigint v from ledger where type = 'fee_out'`);
+      const dust = await one(`select coalesce(sum(amount), 0)::bigint v from deposits where result = 'below_min'`);
+      const uns = await one('select coalesce(sum(onchain), 0)::bigint v, count(*) filter (where onchain > 0)::int n from customers');
+      const big = await one(`select count(*)::int n, coalesce(sum(onchain), 0)::bigint v from customers where onchain >= $1`, [100 * 1_000_000]);
       // 本月归集补给地址的 TRX（燃烧用，是成本；TRX 不是 USDT，不从利润里扣）
       const batches = await db.query(`select plan from sign_batches where kind = 'sweep' and status <> 'planned' and created_at >= date_trunc('month', now() at time zone 'Asia/Shanghai') at time zone 'Asia/Shanghai'`);
       const sweepTrx = batches.reduce((s, b) => s + (b.plan.items || []).reduce((x, it) => x + (it.steps || []).filter((st) => st.kind === 'fee_trx').reduce((y, st) => y + Number(st.amount || 0), 0), 0), 0);
       const period = async (since) => {
-        const [d, o, cn] = await Promise.all([
-          one(`select coalesce(sum(amount), 0)::bigint amount, count(*)::int n, coalesce(sum(fee), 0)::bigint fees, count(distinct merchant_id)::int merchants from deposits where result = 'credited' and time >= ${since}`),
-          one(`select count(*) filter (where status in ('completed', 'overpaid'))::int done, count(*) filter (where status in ('completed', 'overpaid', 'expired', 'expired_partial'))::int closed from orders where created_at >= ${since}`),
-          one(`select count(*)::int n from customers where created_at >= ${since}`),
-        ]);
+        const d = await one(`select coalesce(sum(amount), 0)::bigint amount, count(*)::int n, coalesce(sum(fee), 0)::bigint fees, count(distinct merchant_id)::int merchants from deposits where result = 'credited' and time >= ${since}`);
+        const o = await one(`select count(*) filter (where status in ('completed', 'overpaid'))::int done, count(*) filter (where status in ('completed', 'overpaid', 'expired', 'expired_partial'))::int closed from orders where created_at >= ${since}`);
+        const cn = await one(`select count(*)::int n from customers where created_at >= ${since}`);
         return { amount: d.amount, count: d.n, fees_in: d.fees, active_merchants: d.merchants, new_customers: cn.n, orders_done: o.done, orders_closed: o.closed };
       };
-      const [today, d7, d30] = await Promise.all([period(DAY0), period(`${DAY0} - interval '6 days'`), period(`${DAY0} - interval '29 days'`)]);
+      const today = await period(DAY0), d7 = await period(`${DAY0} - interval '6 days'`), d30 = await period(`${DAY0} - interval '29 days'`);
       const top = await db.query(`select m.name, coalesce(sum(d.amount), 0)::bigint amount, count(*)::int n from deposits d join merchants m on m.id = d.merchant_id
         where d.result = 'credited' and d.time >= ${DAY0} - interval '29 days' group by m.name order by 2 desc limit 5`);
-      const [wd, an, cbf] = await Promise.all([
-        one(`select count(*)::int n, coalesce(sum(amount), 0)::bigint amount from withdrawals where status = 'pending'`),
-        one('select count(*)::int n from anomalies where not handled'),
-        one(`select count(*)::int n from callbacks where status = 'failed' and created_at > now() - interval '24 hours'`),
-      ]);
-      const opened = new Set((await db.query('select kyb_ref from merchants where kyb_ref is not null')).map((r) => r.kyb_ref));
-      const toOpen = (await listApproved().catch(() => [])).filter((a) => !opened.has(a.ref)).length;
+      const wd = await one(`select count(*)::int n, coalesce(sum(amount), 0)::bigint amount from withdrawals where status = 'pending'`);
+      const an = await one('select count(*)::int n from anomalies where not handled');
+      const cbf = await one(`select count(*)::int n from callbacks where status = 'failed' and created_at > now() - interval '24 hours'`);
       const tick = await getMeta(db, 'tick_last');
       const [rc] = await db.query('select day, diff, detail from recon order by day desc limit 1');
       const [size] = await db.query('select pg_database_size(current_database())::bigint bytes').catch(() => [{ bytes: 0 }]);
-      const r = await tron.resources(hot).catch(() => null);
+      console.log(`[overview] db ${Date.now() - t0} ms`);
       return {
+        elapsed_ms: Date.now() - t0,
         funds: {
           collected_total: col.v, deposit_count: col.n,
-          owed_total: owed, owed_available: bal.available, owed_frozen: bal.frozen,
-          assets_total: assets, unswept_total: uns.v, hot_usdt: h ? h.usdt : null, cold_usdt: c ? c.usdt : null, cold_configured: !!cold,
-          profit_total: assets === null ? null : assets - owed,
-          profit_now: wallets === null ? null : Math.max(0, wallets - owed),
-          profit_after_sweep: assets === null ? null : assets - owed - Math.max(0, wallets - owed),
+          owed_total: bal.available + bal.frozen, owed_available: bal.available, owed_frozen: bal.frozen,
+          unswept_total: uns.v, cold_configured: !!cold,
           income_fee_in: fin.v, income_fee_out: fout.v, income_dust: dust.v,
         },
-        todo: { withdrawals_count: wd.n, withdrawals_amount: wd.amount, kyb_pending: await pendingKyb().catch(() => null), merchants_to_open: toOpen, anomalies: an.n, callbacks_failed: cbf.n },
-        sweep: { unswept_total: uns.v, address_count: uns.n, over_threshold: big.n, over_threshold_total: big.v, threshold: 100 * 1_000_000, hot_trx: h ? h.trx : null, energy_left: r ? Math.max(0, r.energyLimit - r.energyUsed) : null, energy_per_sweep: ENERGY_PER_SWEEP, month_sweep_trx: sweepTrx },
+        todo: { withdrawals_count: wd.n, withdrawals_amount: wd.amount, anomalies: an.n, callbacks_failed: cbf.n },
+        sweep: { unswept_total: uns.v, address_count: uns.n, over_threshold: big.n, over_threshold_total: big.v, threshold: 100 * 1_000_000, energy_per_sweep: ENERGY_PER_SWEEP, month_sweep_trx: sweepTrx },
         periods: { today, d7, d30 },
         top_merchants: top.map((t) => ({ name: t.name, amount: t.amount, count: t.n })),
         system: { tick_age_s: tick ? Math.round((Date.now() - Date.parse(tick.at)) / 1000) : null, recon: rc ? { day: iso(rc.day).slice(0, 10), diff: rc.diff, complete: !!rc.detail?.complete } : null, db_bytes: size.bytes, db_limit_bytes: 500 * 1024 * 1024 },
+      };
+    },
+    /**
+     * 平台资产 = 未归集 + 热钱包 + 冷钱包；利润 = 平台资产 − 欠商户。
+     * "现在就能转走的利润" 按保守口径：热钱包 + 冷钱包 − 欠商户（不小于 0），转走后钱包里仍然够付所有商户的提币。
+     * 每个外部查询最多等 6 秒，查不到时对应的数字为 null（页面显示"—"）
+     */
+    async 'overview-chain'() {
+      const t0 = Date.now();
+      const within = async (p, ms = 6000) => { let timer; try { return await Promise.race([p, new Promise((res) => { timer = setTimeout(() => res(null), ms); })]); } catch (e) { console.error(`[overview-chain] ${e.message}`); return null; } finally { clearTimeout(timer); } };
+      const chain = async (a) => { if (!a) return { usdt: 0, trx: 0 }; const acc = await tron.account(a); return { usdt: Number(acc.trc20[tron.contract]) || 0, trx: acc.trx }; };
+      const [h, c, r, approved, kybPending] = await Promise.all([within(chain(hot)), within(chain(cold)), within(tron.resources(hot)), within(listApproved()), within(pendingKyb())]);
+      const [bal] = await db.query('select coalesce(sum(available + frozen), 0)::bigint owed from balances');
+      const [uns] = await db.query('select coalesce(sum(onchain), 0)::bigint v from customers');
+      const opened = new Set((await db.query('select kyb_ref from merchants where kyb_ref is not null')).map((x) => x.kyb_ref));
+      const owed = bal.owed, wallets = h && c ? h.usdt + c.usdt : null, assets = wallets === null ? null : uns.v + wallets;
+      console.log(`[overview-chain] ${Date.now() - t0} ms`);
+      return {
+        elapsed_ms: Date.now() - t0,
+        funds: {
+          hot_usdt: h ? h.usdt : null, cold_usdt: c ? c.usdt : null, assets_total: assets,
+          profit_total: assets === null ? null : assets - owed,
+          profit_now: wallets === null ? null : Math.max(0, wallets - owed),
+          profit_after_sweep: assets === null ? null : assets - owed - Math.max(0, wallets - owed),
+        },
+        todo: { kyb_pending: kybPending, merchants_to_open: approved === null ? null : approved.filter((a) => !opened.has(a.ref)).length },
+        sweep: { hot_trx: h ? h.trx : null, energy_left: r ? Math.max(0, r.energyLimit - r.energyUsed) : null },
       };
     },
 
