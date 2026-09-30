@@ -96,6 +96,7 @@ test.describe.serial('页面走查', () => {
     await merchant.goto(link);
     await shot(merchant, 'merchant-0-setup');
     await merchant.fill('#ms-pw', M_PW); await merchant.fill('#ms-pw2', M_PW); await merchant.click('[data-setup] button[type="submit"]');
+    await expect(merchant.locator('[data-setup-qr]')).toHaveAttribute('src', /^data:image\/png;base64,/); // 二维码出来后再读密钥
     merchantSecret = (await merchant.locator('[data-setup-secret]').textContent())!.trim();
     await shot(merchant, 'merchant-0-setup-totp');
     // 动态码刚好在 30 秒的边界上时会被拒绝：等下一个动态码再试（最多 3 次）
