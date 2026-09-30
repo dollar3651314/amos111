@@ -51,7 +51,7 @@ check "健康检查：连的是 Nile 测试网（不是主网）" "echo '$health
 for p in /merchant/ /docs/ /zh/merchant/ /zh/docs/; do check "$p 返回 200" "[ \"\$(code '$BASE$p')\" = 200 ]"; done
 check "付款页面 /pay/<订单号>/ 返回 200（改写规则生效）" "[ \"\$(code '$BASE/pay/ORD-20260101-00000000/')\" = 200 ]"
 # 收付款接口初始化失败时返回 503 和原因代码（不含配置值），输出出来方便排查
-echo "  收付款接口的返回：$(req "$BASE/api/merchant/?a=overview")"
+echo "  收付款接口的返回：$(curl -s --max-time 15 "${H[@]}" "$BASE/api/merchant/?a=overview")"
 check "开放 API：没有签名返回 401" "[ \"\$(code '$BASE/api/v1/balance/')\" = 401 ]"
 check "商户后台接口：未登录返回 401" "[ \"\$(code '$BASE/api/merchant/?a=overview')\" = 401 ]"
 check "运营后台收付款接口：未登录返回 401" "[ \"\$(code '$BASE/api/wallet/?a=status')\" = 401 ]"
