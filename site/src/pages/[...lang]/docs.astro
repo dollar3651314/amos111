@@ -145,7 +145,7 @@ X-QC-Signature: 5f1c…
       <pre><code>{addrReq}</code></pre>
       <ul>
         <li>{T('Each customer has one permanent address. Every payment to it belongs to that customer, with or without an order. customer_id cannot be changed.', '每个客户一个永久地址，转到这个地址的钱都算这个客户的，不论有没有订单。customer_id 不能修改。')}</li>
-        <li>{T('Deposits under 1 USDT are recorded but not credited, not matched and trigger no callback.', '低于 1 USDT 的到账会记录，但不入账、不匹配，也不发回调。')}</li>
+        <li>{T('Payments under 1 USDT are not credited, not matched, trigger no callback and do not appear in your deposits or exports (they are usually spam "dust" transfers).', '低于 1 USDT 的付款不入账、不匹配、不发回调，也不会出现在你的到账明细和导出里（这类付款通常是垃圾"灰尘"转账）。')}</li>
         <li>{T('customers/stats/ returns received, count, fees and unmatched for a period.', 'customers/stats/ 返回某个时间段的收款合计、笔数、手续费和未匹配金额。')}</li>
       </ul>
 

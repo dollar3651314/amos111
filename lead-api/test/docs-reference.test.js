@@ -86,7 +86,10 @@ test('开发者文档：每个接口实际返回的字段、类型和文档一�
   check('GET', 'orders/', await call('GET', `orders/?order_no=${o.order_no}`));
   check('GET', 'orders/list/', await call('GET', 'orders/list/'));
   const deps = check('GET', 'deposits/', await call('GET', 'deposits/?customer_id=c1'));
-  const dep = deps.items.find((d) => d.result === 'credited');
+  // 低于 1 USDT 的那笔商户看不到（只在运营后台的异常到账里）
+  assert.ok(deps.items.every((d) => d.result === 'credited'));
+  assert.equal(deps.items.length, 1);
+  const dep = deps.items[0];
   const matched = check('POST', 'orders/match/', await call('POST', 'orders/match/', { order_no: o.order_no, deposit_id: dep.id }));
   assert.equal(matched.deposits.length, 1);
   check('GET', 'deposits/', await call('GET', 'deposits/?customer_id=c1')); // 匹配后 order_no、matched_by 有值

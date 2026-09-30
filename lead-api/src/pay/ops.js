@@ -132,10 +132,11 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
     },
     async deposits(m, { cursor = null, limit = 50, customerId = '', matched = '' }) {
       const vals = [m.id, limit + 1];
-      let where = 'merchant_id = $1';
+      // 低于 1 USDT 的到账不入账、不结算给商户，商户（后台和开放 API）看不到，只在运营后台的"异常到账"里显示
+      let where = "merchant_id = $1 and result = 'credited'";
       if (cursor) { vals.push(Number(cursor)); where += ` and id < $${vals.length}`; }
       if (customerId) { vals.push(customerId); where += ` and customer_id = $${vals.length}`; }
-      if (matched === 'false') where += ` and result = 'credited' and order_id is null`;
+      if (matched === 'false') where += ' and order_id is null';
       if (matched === 'true') where += ' and order_id is not null';
       const rows = await db.query(`select * from deposits where ${where} order by id desc limit $2`, vals);
       const p = page(rows.map((r) => ({ ...r, cursor: r.id })), limit);

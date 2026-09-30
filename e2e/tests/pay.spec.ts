@@ -310,7 +310,8 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     // 先准备数据：新客户收到一笔 20.000001 USDT（未归集），热钱包有 USDT 和 TRX（钱包设置、提币审核会显示）
     const c = await api(merchant, 'POST', 'customers/', { customer_id: 'amount_check_1' });
     expect(c.status).toBe(200);
-    await fake(admin, 'tron/pay', { to: c.body.address, amount: 20 * U + 1 });
+    await fake(admin, 'tron/pay', { to: c.body.address, amount: 20 * U });
+    await fake(admin, 'tron/pay', { to: c.body.address, amount: 1 }); // 0.000001 USDT 的灰尘转账
     await fake(admin, 'tron/account', { address: 'TCLBgkbfVkJroVBJVqBEsxtPNQEQMTQCLQ', account: { activated: true, trx: 500 * U, trc20: { TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf: 3000 * U } } });
     await tick(admin);
     await fake(admin, 'daily');
@@ -338,7 +339,17 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await admin.locator('[data-panel="p-sweep"] .toolbar input').press('Enter');
     await admin.locator('[data-panel="p-sweep"] .toolbar input').blur();
     await expect(admin.locator('[data-panel="p-sweep"]')).toContainText(/有 \d+ 个地址低于 100000 USDT/);
+    // 低于 1 USDT 的到账：运营后台的异常到账里有，商户后台看不到（不结算给商户）
+    await admin.click('[data-tab="p-anomalies"]');
+    await expect(admin.locator('[data-panel="p-anomalies"]')).toContainText('0.000001');
     await merchant.goto('/merchant/');
+    await merchant.click('[data-mtab="transactions"]');
+    await expect(merchant.locator('[data-mpanel="transactions"]')).toContainText('amount_check_1');
+    await expect(merchant.locator('[data-mpanel="transactions"]')).not.toContainText('0.000001');
+    await expect(merchant.locator('[data-mpanel="transactions"]')).not.toContainText('低于 1 USDT');
+    const csv = await merchant.evaluate(async () => (await fetch('/api/merchant/?a=export&type=deposits')).text());
+    expect(csv).toContain('amount_check_1');
+    expect(csv).not.toContain('0.000001');
     for (const tab of ['overview', 'customers', 'orders', 'transactions', 'withdraw', 'api', 'callbacks']) {
       await merchant.click(`[data-mtab="${tab}"]`);
       await merchant.waitForLoadState('networkidle');

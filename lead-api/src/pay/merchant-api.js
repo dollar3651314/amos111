@@ -159,7 +159,7 @@ export function createMerchantApi({ db, keys, ops, send, now = () => Date.now() 
     const kind = q.get('type');
     const customerId = q.get('customer_id') || '';
     if (kind === 'deposits' || kind === 'customer') {
-      const rows = await db.query(`select * from deposits where merchant_id = $1 and ($2 = '' or customer_id = $2) order by id desc limit 20000`, [m.id, customerId]);
+      const rows = await db.query(`select * from deposits where merchant_id = $1 and result = 'credited' and ($2 = '' or customer_id = $2) order by id desc limit 20000`, [m.id, customerId]); // 低于 1 USDT 的不给商户看
       return csv(rows, [['time', (r) => iso(r.time)], ['customer_id', (r) => r.customer_id], ['address', (r) => r.address], ['txid', (r) => r.txid], ['amount', (r) => amt(r.amount)], ['fee', (r) => amt(r.fee)],
         ['credited', (r) => (r.result === 'credited' ? amt(r.amount - r.fee) : '0.00')], ['result', (r) => r.result], ['order_no', (r) => r.order_id || ''], ['matched_by', (r) => r.match_type || '']]);
     }
