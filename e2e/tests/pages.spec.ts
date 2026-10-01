@@ -156,3 +156,68 @@ for (const p of PAGES) {
     expect(errors).toEqual([]);
   });
 }
+
+// ---------- v7.1：商户登录和管理平台入口 ----------
+// TC-V71-1 (AC-7.1-1～3) 每个页面：页头和页脚"公司"一栏有商户登录（跟随当前语言），页脚最底部有不显眼的管理平台入口
+for (const p of PAGES) {
+  test(`TC-V71-1 AC-7.1-1～3 ${p.path} 商户登录和管理平台入口`, async ({ page }) => {
+    const merchant = p.lang === 'en' ? '/merchant/' : '/zh/merchant/';
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(p.path);
+    const login = page.locator('header [data-merchant-login]');
+    await expect(login).toBeVisible();
+    await expect(login).toHaveAttribute('href', merchant);
+    await expect(login).toHaveText(p.lang === 'en' ? 'Merchant login' : '商户登录');
+    await expect(page.locator('footer [data-footer-merchant]')).toHaveAttribute('href', merchant);
+    const admin = page.locator('footer [data-admin-login]');
+    await expect(admin).toHaveAttribute('href', '/admin/');
+    await expect(admin).toHaveAttribute('rel', 'nofollow');
+    await expect(admin).toHaveText(p.lang === 'en' ? 'Admin' : '管理平台');
+    // 不显眼：字号比版权小
+    const [adminSize, copySize] = await Promise.all([admin, page.locator('footer .copy')].map((l) => l.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))));
+    expect(adminSize).toBeLessThan(copySize);
+    // 手机：菜单里有商户登录
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.click('[data-menu-toggle]');
+    await expect(login).toBeVisible();
+  });
+}
+
+// TC-V71-2 (AC-7.1-1) 点击进入对应语言的商户后台登录页；管理平台进入后台
+test('TC-V71-2 AC-7.1-1 AC-7.1-3 点击商户登录、管理平台进入对应页面', async ({ page }) => {
+  for (const [path, merchant] of [['/', '/merchant/'], ['/zh/', '/zh/merchant/']]) {
+    await page.goto(path);
+    await page.click('header [data-merchant-login]');
+    await expect(page).toHaveURL(merchant);
+    await expect(page.locator('[data-view="login"]')).toHaveCount(1); // 商户后台页面（8080 实例没有收付款接口，这里只确认到了这个页面）
+  }
+  await page.goto('/zh/');
+  await page.click('footer [data-admin-login]');
+  await expect(page).toHaveURL('/admin/');
+});
+
+// TC-V71-3 (AC-7.1-4) 几种宽度下页头的文字都不折行（加了商户登录后，英文导航在 961～1100 曾经折成两行）
+for (const w of [375, 768, 1000, 1024, 1101, 1280]) {
+  for (const path of ['/', '/zh/']) {
+    test(`TC-V71-3 AC-7.1-4 ${w}px ${path} 页头不折行、无横向滚动`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: 800 });
+      await page.goto(path);
+      const r = await page.evaluate(() => ({
+        over: document.documentElement.scrollWidth - window.innerWidth,
+        // 可见的导航文字链接和 Logo 都只有一行
+        wrapped: [...document.querySelectorAll<HTMLElement>('header .brand, header .nav a:not(.btn)')].filter((a) => a.offsetParent && a.getClientRects().length > 1).map((a) => a.textContent?.trim()),
+        brandH: document.querySelector('header .brand')!.getBoundingClientRect().height,
+      }));
+      expect(r.over).toBeLessThanOrEqual(0);
+      expect(r.wrapped).toEqual([]);
+      expect(r.brandH).toBeLessThan(48);
+    });
+  }
+}
+
+// TC-V71-4 (AC-7.1-5) 站点地图不包含商户后台和管理平台
+test('TC-V71-4 AC-7.1-5 sitemap 不包含 /merchant/、/admin/', async ({ request }) => {
+  const xml = await (await request.get('/sitemap.xml')).text();
+  expect(xml).not.toContain('/merchant/');
+  expect(xml).not.toContain('/admin/');
+});
