@@ -14,6 +14,7 @@
     "about": "关于我们",
     "contact": "联系我们",
     "cta": "预约演示",
+    "merchantLogin": "商户登录",
     "menu": "菜单",
     "switchLabel": "EN",
     "switchAria": "Switch to English"
@@ -27,7 +28,9 @@
     "riskTitle": "风险提示",
     "risk": "稳定币属于数字资产，其价值可能偏离所锚定的货币；区块链交易一经确认通常不可撤销。服务是否可用取决于您所在的司法辖区以及是否通过我们的准入审核。本网站内容不构成任何投资、法律或税务建议。",
     "notMainland": "Quick Come 不向中国大陆居民或机构提供服务。",
-    "rights": "保留所有权利。"
+    "rights": "保留所有权利。",
+    "admin": "管理平台",
+    "adminTitle": "Quick Come 运营管理平台"
   },
   "cta": {
     "title": "看看 Quick Come 如何适配您的业务",

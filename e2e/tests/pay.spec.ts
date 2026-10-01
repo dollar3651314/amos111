@@ -338,11 +338,17 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await expect(admin.locator('[data-toast]')).toContainText('对账完成');
     await expect(admin.locator('[data-panel="p-recon"] tbody').first()).toContainText(new Date().toISOString().slice(0, 10));
     // 归集：地址都低于筛选金额时，说明有多少个地址被筛掉了
+    // 归集页前面已经打开过：点标签会重新读取并整页重画（BUG-V7-3）。先等这次读取的两个接口都返回；
+    // 万一填值时正好重画，值会写进已移除的旧输入框，所以"填值、回车、检查"整体重试，直到在稳定的页面上生效
+    const sweepLoaded = Promise.all([admin.waitForResponse(/a=sweep-list/), admin.waitForResponse(/a=batches/)]);
     await admin.click('[data-tab="p-sweep"]');
-    await admin.locator('[data-panel="p-sweep"] .toolbar input').fill('100000');
-    await admin.locator('[data-panel="p-sweep"] .toolbar input').press('Enter');
-    await admin.locator('[data-panel="p-sweep"] .toolbar input').blur();
-    await expect(admin.locator('[data-panel="p-sweep"]')).toContainText(/有 \d+ 个地址低于 100000 USDT/);
+    await sweepLoaded;
+    await expect(async () => {
+      const minInput = admin.locator('[data-panel="p-sweep"] .toolbar input');
+      await minInput.fill('100000');
+      await minInput.press('Enter');
+      await expect(admin.locator('[data-panel="p-sweep"]')).toContainText(/有 \d+ 个地址低于 100000 USDT/, { timeout: 2000 });
+    }).toPass({ timeout: 15_000 });
     // 低于 1 USDT 的到账：运营后台的异常到账里有，商户后台看不到（不结算给商户）
     await admin.click('[data-tab="p-anomalies"]');
     await expect(admin.locator('[data-panel="p-anomalies"]')).toContainText('0.000001');

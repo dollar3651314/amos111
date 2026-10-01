@@ -14,6 +14,7 @@
     "about": "About",
     "contact": "Contact",
     "cta": "Book a demo",
+    "merchantLogin": "Merchant login",
     "menu": "Menu",
     "switchLabel": "中文",
     "switchAria": "切换到中文"
@@ -27,7 +28,9 @@
     "riskTitle": "Risk notice",
     "risk": "Stablecoins are digital assets. Their value may deviate from the reference currency, and blockchain transactions are generally irreversible once confirmed. Availability of services depends on your jurisdiction and on completing our onboarding checks. Nothing on this website is investment, legal or tax advice.",
     "notMainland": "Quick Come services are not offered to residents or entities in Mainland China.",
-    "rights": "All rights reserved."
+    "rights": "All rights reserved.",
+    "admin": "Admin",
+    "adminTitle": "Quick Come operations console"
   },
   "cta": {
     "title": "See how Quick Come fits your business",
