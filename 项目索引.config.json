@@ -1,0 +1,48 @@
+{
+  "_说明": "项目地图和项目索引的检查配置（agents 规则 C53）。由 scripts/check-project-index.mjs 读取，npm test 和 CI 都会运行。新增需要写进索引的一类名单（例如新的接口分组），在 lists 里加一项。",
+  "map": "项目地图.md",
+  "index": "项目索引.md",
+  "entry": ["CLAUDE.md", "AGENTS.md"],
+  "files": {
+    "include": ["api/**", "lead-api/**", "site/src/**", "site/scripts/**", "site/brand-src/**", "site/package.json", "site/astro.config.mjs", "e2e/**", "config/**", ".github/workflows/**", "scripts/**", "package.json", "vercel.json", "项目索引.config.json", "*.md", "需求文档/**", "技术方案/**", "测试报告/**", "部署方案/**", "交付记录/**"],
+    "exclude": ["**/package-lock.json", "**/.gitignore"]
+  },
+  "lists": [
+    {
+      "name": "环境变量",
+      "section": "5. 环境变量",
+      "sources": ["api/", "lead-api/src/", "lead-api/scripts/", "site/src/", "site/astro.config.mjs", "e2e/", ".github/workflows/"],
+      "patterns": ["\\benv(?:\\.|\\[['\"])([A-Z][A-Z0-9_]+)", "\\$\\{\\{\\s*(?:vars|secrets)\\.([A-Z][A-Z0-9_]+)"],
+      "match": "firstColumn",
+      "twoWay": "word",
+      "token": "^[A-Z][A-Z0-9_]+$"
+    },
+    {
+      "name": "数据库表",
+      "section": "4.1",
+      "sources": ["lead-api/src/pay/schema.js"],
+      "patterns": ["create table if not exists (\\w+)"],
+      "match": "firstColumn",
+      "twoWay": "extracted"
+    },
+    {
+      "name": "pay_meta 的键",
+      "section": "4.1",
+      "sources": ["lead-api/src/pay/"],
+      "patterns": ["[gs]etMeta\\(\\w+, '(\\w+)'", "pay_meta \\(key, value\\) values \\('(\\w+)'", "from pay_meta where key = '(\\w+)'"]
+    },
+    {
+      "name": "运营后台的标签",
+      "section": "3. 页面索引",
+      "sources": ["site/src/pages/admin/index.astro"],
+      "patterns": ["data-tab=\"([\\w-]+)\""]
+    },
+    {
+      "name": "商户后台的标签",
+      "section": "3. 页面索引",
+      "sources": ["site/src/pages/[...lang]/merchant.astro"],
+      "within": "const tabs = \\[([^\\]]+)\\]",
+      "patterns": ["'([\\w-]+)'"]
+    }
+  ]
+}

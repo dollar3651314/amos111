@@ -17,3 +17,4 @@
 ## 每次改动都要做
 - 在同一个 PR 里更新《项目地图》和《项目索引》（agents 规则 C53）。`npm test` 里的 `lead-api/test/project-index.test.js` 会检查索引有没有漏掉或写错。
 - 提交前：`npm test`；改了页面：`cd site && npm run build`，再跑 `cd e2e && npx playwright test`。
+- PR 的 CI（`.github/workflows/ci.yml`）必须通过才能合并（agents 规则 C54）；合并前确认 PR 页面的检查是绿的。
