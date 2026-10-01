@@ -5,6 +5,7 @@ interface Props { lang: Lang }
 const { lang } = Astro.props;
 const d = t(lang);
 const year = new Date().getFullYear();
+const merchantHref = lang === 'en' ? '/merchant/' : '/zh/merchant/';
 ---
 <footer class="site-footer">
   <div class="container">
@@ -22,6 +23,7 @@ const year = new Date().getFullYear();
           <li><a href={href(lang, 'security')}>{d.nav.security}</a></li>
           <li><a href={href(lang, 'about')}>{d.nav.about}</a></li>
           <li><a href={href(lang, 'contact')}>{d.nav.contact}</a></li>
+          <li><a href={merchantHref} data-footer-merchant>{d.nav.merchantLogin}</a></li>
         </ul>
       </div>
       <div>
@@ -37,7 +39,11 @@ const year = new Date().getFullYear();
       <p>{d.footer.risk}</p>
       <p data-not-mainland><strong>{d.footer.notMainland}</strong></p>
     </section>
-    <p class="copy">© {year} {d.brand.entity}. {d.footer.rights}</p>
+    <div class="bottom">
+      <p class="copy">© {year} {d.brand.entity}. {d.footer.rights}</p>
+      <!-- v7.1：运营管理平台的入口，放在最底部、颜色和版权一样淡，不做强调 -->
+      <a class="admin-link" href="/admin/" rel="nofollow" title={d.footer.adminTitle} data-admin-login>{d.footer.admin}</a>
+    </div>
   </div>
 </footer>
 
@@ -52,6 +58,9 @@ const year = new Date().getFullYear();
   ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
   .risk { border-top: 1px solid rgba(255, 255, 255, 0.12); margin-top: 40px; padding-top: 24px; font-size: 0.85rem; }
   .risk h2 { margin-bottom: 8px; }
-  .copy { font-size: 0.85rem; margin: 16px 0 0; color: #8fa1b5; }
+  .bottom { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+  .copy { font-size: 0.85rem; margin: 0; color: #8fa1b5; }
+  .site-footer .admin-link { font-size: 0.75rem; color: #6f8296; }
+  .site-footer .admin-link:hover { color: #c3cfdd; }
   @media (max-width: 720px) { .cols { grid-template-columns: 1fr 1fr; } .cols > :first-child { grid-column: 1 / -1; } }
 </style>
