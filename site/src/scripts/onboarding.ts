@@ -194,7 +194,8 @@ function validateStep(i: number): boolean {
   if (!editable.has(STEP_SECTION[i])) return true; // 补件时锁定的部分不再校验
   let ok = true;
   for (const f of sec.querySelectorAll<HTMLElement>('[data-field]')) if (!validateField(f)) ok = false;
-  if (i === 1) ok = validatePeople() && validateDocs(sec) && ok;
+  // 人员和身份证明的错误一次全部显示（不要因为前一项不通过就跳过后一项）
+  if (i === 1) { const peopleOk = validatePeople(); const docsOk = validateDocs(sec); ok = peopleOk && docsOk && ok; }
   if (i === SIGN_STEP) ok = validateSignature() && ok;
   showAlert(ok ? '' : cfg.errors.summary);
   if (!ok) sec.querySelector<HTMLElement>('[aria-invalid="true"], .err:not(:empty)')?.scrollIntoView({ block: 'center' });
@@ -455,7 +456,16 @@ btnSubmit.addEventListener('click', async () => {
   try {
     if (!cfg.prototype && !token) throw new Error('no token');
     st = await api.load();
-  } catch {
+  } catch (err) {
+    // 只有链接确实无效（404）时才说"链接无效"；服务器出错或网络断开时提示重试，不要让客户以为链接坏了
+    const status = (err as ApiError).status;
+    if (token && status !== 404) {
+      invalid.textContent = cfg.errors.loadFailed + ' ';
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'btn btn-outline btn-sm'; retry.textContent = cfg.errors.retry;
+      retry.addEventListener('click', () => location.reload());
+      invalid.appendChild(retry);
+    }
     invalid.hidden = false;
     return;
   }

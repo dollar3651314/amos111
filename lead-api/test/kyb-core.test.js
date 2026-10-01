@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { deriveKeys, encryptJson, decryptJson, newToken, hashToken } from '../src/kyb/crypto.js';
 import { totpCode, verifyTotp, base32Encode, base32Decode } from '../src/kyb/totp.js';
 import { hashPassword, verifyPassword, makeSession, readSession } from '../src/kyb/auth.js';
-import { validateSection, validateForSubmit } from '../src/kyb/schema.js';
+import { validateSection, validateForSubmit, upgradeToV7, mapUnlocked, keepLegacy, DOC_IDS } from '../src/kyb/schema.js';
 
 const SECRET = 'unit-test-secret-unit-test-secret-0123456789';
 
@@ -56,39 +56,104 @@ test('密码哈希与会话：错误密码失败；会话过期、被篡改、�
   assert.equal(readSession(k.session, 'qc_admin=garbage', 3, now), null);
 });
 
-const person = (o = {}) => ({ pid: '0', roles: ['director', 'ubo'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'SG', residence: 'SG', address: 'x', passportNo: 'K1', passportCountry: 'SG', passportExpiry: '2031-05-01', pep: 'no', email: 'j@a.com', phone: '+65 9000 1111', ...o });
+const person = (o = {}) => ({ pid: '0', roles: ['director', 'ubo', 'contact'], fullName: 'Jane Tan', dob: '1984-02-11', nationality: 'SG', address: 'x', idType: 'passport', idNo: 'K1', idCountry: 'SG', idExpiry: '2031-05-01', ownershipPct: '100', votingPct: '100', pep: 'no', email: 'j@a.com', phone: '+65 9000 1111', ...o });
 
 test('字段校验：草稿只拦截非法内容，提交时严格校验', () => {
   const now = Date.parse('2026-09-28T00:00:00Z');
   assert.deepEqual(validateSection('entity', { legalName: '' }, { now }).errors, {});
   assert.equal(validateSection('entity', { legalName: 'A\nB' }, { now }).errors['entity.legalName'], 'invalid');
   assert.equal(validateSection('entity', { nature: ['casino'] }, { now }).errors['entity.nature'], 'invalid');
-  const strict = validateSection('entity', { nature: ['other'] }, { strict: true, now }).errors;
+  const strict = validateSection('entity', { nature: ['other'], email: 'bad', phone: 'call me' }, { strict: true, now }).errors;
   assert.equal(strict['entity.legalName'], 'required');
   assert.equal(strict['entity.natureOther'], 'required');
-  assert.equal(validateSection('contact', { email: 'bad', phone: 'call me' }, { strict: true, now }).errors['contact.email'], 'email');
-  const p = validateSection('people', [person({ passportExpiry: '2026-01-01', pep: 'yes' })], { strict: true, now }).errors;
-  assert.equal(p['people.0.passportExpiry'], 'future');
+  // v7：公司联系方式并入企业信息（AC-7-2）
+  assert.equal(strict['entity.email'], 'email'); assert.equal(strict['entity.phone'], 'phone'); assert.equal(strict['entity.website'], 'required');
+  for (const gone of ['lei', 'tin', 'parent']) assert.equal(validateSection('entity', { [gone]: 'x' }, { now }).data[gone], undefined, gone);
+  // v7：旧步骤不能再单独保存
+  for (const old of ['contact', 'rep', 'docs']) assert.equal(validateSection(old, {}, { now }).errors._section, 'invalid', old);
+  const p = validateSection('people', [person({ idExpiry: '2026-01-01', pep: 'yes' })], { strict: true, now }).errors;
+  assert.equal(p['people.0.idExpiry'], 'future'); // AC-7-5
   assert.equal(p['people.0.pepDetails'], 'required');
   assert.equal(validateSection('people', [person({ roles: ['director'] })], { strict: true, now }).errors.people, 'people');
   assert.equal(validateSection('people', [person()], { strict: true, now }).errors.people, undefined);
+  assert.equal(validateSection('people', [person({ residence: 'SG' })], { now }).data[0].residence, undefined); // 居住国已删除
 });
 
-test('提交校验：必传文件（企业 1 到 6 项、每人护照和地址证明、钱包证明）', () => {
+test('v7 人员：证件类型、证件号码、签发国、到期日必填；恰好 1 位授权联系人，只有他的邮箱电话必填（AC-7-4、AC-7-5）', () => {
   const now = Date.parse('2026-09-28T00:00:00Z');
-  const form = { people: [person()] };
+  const e = validateSection('people', [person({ idType: '', idNo: '', idCountry: '', idExpiry: '' })], { strict: true, now }).errors;
+  for (const k of ['idType', 'idNo', 'idCountry', 'idExpiry']) assert.equal(e[`people.0.${k}`], 'required', k);
+  assert.equal(validateSection('people', [person({ idType: 'driver' })], { now }).errors['people.0.idType'], 'invalid');
+  assert.deepEqual(validateSection('people', [person({ idType: 'id_card' })], { strict: true, now }).errors, {});
+  const noContact = validateSection('people', [person({ roles: ['director', 'ubo'] })], { strict: true, now }).errors;
+  assert.equal(noContact.people, 'people');
+  const two = validateSection('people', [person(), person({ pid: '1' })], { strict: true, now }).errors;
+  assert.equal(two.people, 'people');
+  const contactNoMail = validateSection('people', [person({ email: '', phone: '' })], { strict: true, now }).errors;
+  assert.equal(contactNoMail['people.0.email'], 'required'); assert.equal(contactNoMail['people.0.phone'], 'required');
+  const other = validateSection('people', [person(), person({ pid: '1', roles: ['signatory'], email: '', phone: '' })], { strict: true, now }).errors;
+  assert.deepEqual(other, {});
+});
+
+test('提交校验：v7 每位人员必须有身份证明，公司文件选传（AC-7-3、AC-7-6、AC-7-7）', () => {
+  const now = Date.parse('2026-09-28T00:00:00Z');
+  const form = { people: [person(), person({ pid: '1', roles: ['signatory'] })] };
   const errs = validateForSubmit(form, [], now);
-  for (const k of ['docs.d1', 'docs.d6', 'docs.passport:0', 'docs.poa:0', 'docs.walletProof']) assert.equal(errs[k], 'required', k);
-  assert.equal(errs['docs.d10'], undefined);
-  const files = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'walletProof'].map((doc) => ({ doc })).concat([{ doc: 'passport', person: '0' }, { doc: 'poa', person: '0' }]);
-  const e2 = validateForSubmit(form, files, now);
+  assert.equal(errs['docs.id:0'], 'required'); assert.equal(errs['docs.id:1'], 'required');
+  for (const k of ['docs.d1', 'docs.company', 'docs.walletProof', 'docs.poa:0', 'docs.passport:0']) assert.equal(errs[k], undefined, k);
+  const e2 = validateForSubmit(form, [{ doc: 'id', person: '0' }, { doc: 'id', person: '1' }], now);
   assert.equal(Object.keys(e2).filter((k) => k.startsWith('docs.')).length, 0);
+  assert.equal(validateForSubmit(form, [{ doc: 'id', person: '0' }, { doc: 'passport', person: '1' }], now)['docs.id:1'], 'required');
+  for (const d of ['company', 'id']) assert.ok(DOC_IDS.has(d));
+  for (const d of ['d1', 'd6', 'passport', 'poa', 'walletProof']) assert.ok(!DOC_IDS.has(d), d);
+});
+
+test('v7 旧申请整理：联系方式并入企业信息；授权联系人变成人员；护照变成证件；文件归类；旧数据保留（AC-7-10）', () => {
+  const v4 = () => ({
+    form: {
+      entity: { legalName: 'A', lei: 'LEI1', tin: 'T1' },
+      contact: { website: 'a.example', email: 'ops@a.example', phone: '+65 1111', otherContact: 'wechat' },
+      rep: { name: 'Bob Lee', email: 'bob@a.example', phone: '+65 2222' },
+      people: [{ pid: '0', roles: ['director', 'ubo'], fullName: 'Jane Tan', residence: 'SG', passportNo: 'K1', passportCountry: 'SG', passportExpiry: '2031-05-01', email: 'jane@a.example' }],
+      wallet: { clientName: 'A', idTypeNo: 'X', proofType: 'provider' },
+    },
+    files: [{ id: 'f1', doc: 'd1' }, { id: 'f2', doc: 'passport', person: '0' }, { id: 'f3', doc: 'poa', person: '0' }, { id: 'f4', doc: 'walletProof' }],
+  });
+  const p = v4();
+  assert.equal(upgradeToV7(p), true);
+  assert.equal(p.form.v, 7);
+  assert.deepEqual([p.form.entity.website, p.form.entity.email, p.form.entity.phone], ['a.example', 'ops@a.example', '+65 1111']);
+  assert.equal(p.form.entity.lei, 'LEI1'); // 删掉的字段数据不删
+  assert.equal(p.form.people.length, 2);
+  const jane = p.form.people[0];
+  assert.deepEqual([jane.idType, jane.idNo, jane.idCountry, jane.idExpiry, jane.passportNo], ['passport', 'K1', 'SG', '2031-05-01', 'K1']);
+  assert.deepEqual(p.form.people[1], { pid: '1', roles: ['contact'], fullName: 'Bob Lee', email: 'bob@a.example', phone: '+65 2222' });
+  assert.deepEqual(p.files.map((f) => f.doc), ['company', 'id', 'poa', 'walletProof']);
+  assert.equal(p.files[0].legacyDoc, 'd1');
+  assert.ok(p.form.contact && p.form.rep, '旧的步骤数据保留，后台照常显示');
+  assert.equal(upgradeToV7(p), false); // 再整理一次不变
+
+  // 授权联系人本来就在人员里（按邮箱或姓名识别）：只加角色，不新增人员
+  for (const rep of [{ name: 'X', email: 'JANE@a.example' }, { name: ' jane tan ', email: 'other@a.example' }]) {
+    const q = v4(); q.form.rep = { ...rep, phone: '+65 3333' };
+    upgradeToV7(q);
+    assert.equal(q.form.people.length, 1);
+    assert.deepEqual(q.form.people[0].roles, ['director', 'ubo', 'contact']);
+    assert.equal(q.form.people[0].phone, '+65 3333');
+  }
+  // 补件时开放的旧步骤名换成新步骤名
+  assert.deepEqual(mapUnlocked(['contact']), ['entity']);
+  assert.deepEqual(mapUnlocked(['rep', 'wallet']), ['people', 'wallet']);
+  assert.deepEqual(mapUnlocked(['docs']), ['entity', 'people']);
+  // 保存时保留旧字段的数据（人员按 pid 对应）
+  assert.deepEqual(keepLegacy('entity', { legalName: 'Old', lei: 'L' }, { legalName: 'New' }), { lei: 'L', legalName: 'New' });
+  assert.deepEqual(keepLegacy('people', [{ pid: '0', residence: 'SG', fullName: 'a' }], [{ pid: '0', fullName: 'b' }, { pid: '1', fullName: 'c' }]), [{ residence: 'SG', pid: '0', fullName: 'b' }, { pid: '1', fullName: 'c' }]);
 });
 
 // ---------- v4 字段规则 ----------
 import { validateSection as vs4 } from '../src/kyb/schema.js';
-const base4 = { legalName: 'A', legalForm: 'Ltd', regNumber: '1', incDate: '2020-01-01', incPlace: 'SG', regAddress: 'a', physAddress: 'a', nature: ['export'], purpose: ['crypto', 'deposits'], volume: 'lt50k', currencies: ['usd'], markets: ['apac'], sanctions: 'no' };
-const person4 = { pid: '0', roles: ['director', 'ubo'], fullName: 'A', dob: '1980-01-01', nationality: 'SG', residence: 'SG', address: 'a', passportNo: 'X', passportCountry: 'SG', passportExpiry: '2099-01-01', ownershipPct: '51.5', votingPct: '100', pep: 'no', email: 'a@x.com', phone: '+65 1234' };
+const base4 = { legalName: 'A', website: 'a.example', email: 'a@x.com', phone: '+65 1234', legalForm: 'Ltd', regNumber: '1', incDate: '2020-01-01', incPlace: 'SG', regAddress: 'a', physAddress: 'a', nature: ['export'], purpose: ['crypto', 'deposits'], volume: 'lt50k', currencies: ['usd'], markets: ['apac'], sanctions: 'no' };
+const person4 = { pid: '0', roles: ['director', 'ubo', 'contact'], fullName: 'A', dob: '1980-01-01', nationality: 'SG', address: 'a', idType: 'passport', idNo: 'X', idCountry: 'SG', idExpiry: '2099-01-01', ownershipPct: '51.5', votingPct: '100', pep: 'no', email: 'a@x.com', phone: '+65 1234' };
 test('v4 企业信息：币种必填；选"其他"要注明（AC-V1）', () => {
   assert.deepEqual(vs4('entity', base4, { strict: true }).errors, {});
   assert.equal(vs4('entity', { ...base4, currencies: [] }, { strict: true }).errors['entity.currencies'], 'required');

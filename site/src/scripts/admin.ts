@@ -366,7 +366,7 @@ async function openDetail(id: string) {
       const link = el('a', '', `${x.name} · ${x.size >= 1048576 ? (x.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(x.size / 1024)) + ' KB'}`) as HTMLAnchorElement;
       link.href = A.fileUrl(a.id, x.id);
       if (PROTO) link.addEventListener('click', (e) => { e.preventDefault(); toast('原型：正式版会通过后台函数安全下载'); });
-      row.append(el('span', '', DOC_NAMES[x.doc] || x.doc), link);
+      row.append(el('span', '', DOC_NAMES[x.legacyDoc || x.doc] || x.doc), link); // v7 整理过的旧文件显示原来的文件项名称
       return row;
     };
     const fileCard = (title: string, list: any[], empty: string) => {

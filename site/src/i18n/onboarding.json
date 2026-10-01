@@ -217,6 +217,8 @@
       "signature": "Please sign in the box.",
       "summary": "Please correct the highlighted fields.",
       "invalid": "This link is invalid or has expired. Please contact us for a new link.",
+      "loadFailed": "We could not load your application right now. Please check your connection and try again.",
+      "retry": "Try again",
       "percent": "Enter a number from 0 to 100 (up to 2 decimal places).",
       "idDoc": "Upload an identity document for this person.",
       "tooMany": "Too many files: up to {n}."
@@ -494,6 +496,8 @@
       "signature": "请在框内签名。",
       "summary": "请修改标出的字段。",
       "invalid": "此链接无效或已过期，请联系我们获取新的链接。",
+      "loadFailed": "暂时无法读取您的申请，请检查网络后重试。",
+      "retry": "重试",
       "percent": "请输入 0 到 100 的数字，最多 2 位小数。",
       "idDoc": "请为这位人员上传身份证明。",
       "tooMany": "文件太多，最多 {n} 个。"

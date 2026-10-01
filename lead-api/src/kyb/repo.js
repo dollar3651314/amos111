@@ -56,7 +56,7 @@ export function createRepo({ redis, keys, now = () => Date.now() }) {
         status: 'invited', company: String(company).slice(0, 200), leadId: leadId || null,
         createdAt: iso(), invitedAt: iso(), submittedAt: null, decidedAt: null, relationshipEndedAt: null,
         unlocked: [], fileCount: 0,
-        enc: encryptJson(keys.enc, { email, form: {}, files: [], signature: null, review: {} }),
+        enc: encryptJson(keys.enc, { email, form: { v: 7 }, files: [], signature: null, review: {} }),
       };
       const token = await issueToken(app);
       await write(app);

@@ -1,9 +1,14 @@
 // 开户资料的服务端校验。规则与前端（site/src/scripts/onboarding.ts）一致；服务端是最终依据（AC-K4、AC-K5）。
-export const SECTIONS = ['entity', 'contact', 'rep', 'people', 'docs', 'wallet', 'decl'];
-export const COMPANY_DOCS_REQUIRED = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
-// v4：删除第 11、12 项（资金来源类证明）。已上传的旧文件保留在申请里，后台照常可以下载
-export const COMPANY_DOCS_OPTIONAL = ['d10', 'd13', 'd14', 'd15', 'd16'];
-export const DOC_IDS = new Set([...COMPANY_DOCS_REQUIRED, ...COMPANY_DOCS_OPTIONAL, 'passport', 'poa', 'walletProof']);
+// v7：4 个步骤（需求说明书 v7）。v4 及以前的 contact、rep、docs 三步并入 entity、people，旧数据保留，只用于显示
+export const SECTIONS = ['entity', 'people', 'wallet', 'decl'];
+export const FORM_VERSION = 7;
+// v7：文件只有两类。公司文件（选传，最多 20 个）和每位人员的身份证明（必传，1～3 个）。
+// 旧版的文件项（d1～d16、护照、地址证明、钱包所有权证明）保留在已有申请里，后台照常可以下载
+export const DOC_IDS = new Set(['company', 'id']);
+export const MAX_COMPANY_FILES = 20;
+export const MAX_ID_FILES = 3;
+/** 文件属于哪一步（决定补件时能不能改） */
+export const docSection = (doc) => (doc === 'company' || /^d\d+$/.test(doc) ? 'entity' : doc === 'walletProof' ? 'wallet' : 'people');
 export const FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_PEOPLE = 30;
@@ -19,7 +24,8 @@ const F = (type, required, extra = {}) => ({ type, required, ...extra });
 const ENTITY = {
   legalName: F('text', true), tradingName: F('text', false), legalForm: F('text', true), regNumber: F('text', true),
   incDate: F('date', true, { past: true }), incPlace: F('text', true), regAddress: F('long', true), physAddress: F('long', true),
-  lei: F('text', false), tin: F('text', false),
+  // v7：公司联系方式并入企业信息；删除 LEI、税号、集团 / 母公司
+  website: F('text', true), email: F('email', true), phone: F('tel', true),
   nature: F('multi', true, { options: ['export', 'manufacturing', 'b2b', 'cfd', 'securities', 'fx', 'other'] }), natureOther: F('text', false),
   // v4：业务用途改为 4 个选项、多选；月交易量去掉"其他"，50 万以上要写金额；新增币种和制裁声明
   purpose: F('multi', true, { options: ['crypto', 'exchange', 'deposits', 'other'] }), purposeOther: F('text', false),
@@ -27,27 +33,27 @@ const ENTITY = {
   currencies: F('multi', true, { options: ['usd', 'eur', 'usdt', 'usdc', 'btc', 'eth', 'other'] }), currenciesOther: F('text', false),
   markets: F('multi', true, { options: ['europe', 'na', 'latam', 'uk', 'me', 'apac', 'other'] }), marketsOther: F('text', false),
   sanctions: F('choice', true, { options: ['yes', 'no'] }), sanctionsDetails: F('long', false),
-  parent: F('text', false),
 };
-const CONTACT = { website: F('text', true), email: F('email', true), phone: F('tel', true), otherContact: F('text', false) };
-const REP = { name: F('text', true), email: F('email', true), phone: F('tel', true), otherContact: F('text', false) };
 const PERSON = {
-  roles: F('multi', true, { options: ['director', 'ubo', 'signatory'] }), fullName: F('text', true), dob: F('date', true, { past: true }),
-  nationality: F('text', true), residence: F('text', true), address: F('long', true), passportNo: F('text', true),
-  passportCountry: F('text', true), passportExpiry: F('date', true, { future: true }),
+  // v7：授权联系人是人员的一个角色（必须有且只有 1 位）；证件不限护照；删除居住国
+  roles: F('multi', true, { options: ['director', 'ubo', 'signatory', 'contact'] }), fullName: F('text', true), dob: F('date', true, { past: true }),
+  nationality: F('text', true), address: F('long', true),
+  idType: F('choice', true, { options: ['passport', 'id_card'] }), idNo: F('text', true), idCountry: F('text', true), idExpiry: F('date', true, { future: true }),
   ownershipPct: F('percent', false), votingPct: F('percent', false), // v4：勾选 UBO 时必填
   pep: F('choice', true, { options: ['yes', 'no'] }),
-  pepDetails: F('long', false), email: F('email', true), phone: F('tel', true),
+  pepDetails: F('long', false), email: F('email', false), phone: F('tel', false), // v7：只有授权联系人必填
 };
 const WALLET = {
-  clientName: F('text', true), idTypeNo: F('text', true), userId: F('text', false), email: F('email', true), address: F('text', true),
+  // v7：删除证件类型及号码、User ID、所有权证明
+  clientName: F('text', true), email: F('email', true), address: F('text', true),
   network: F('choice', true, { options: ['tron', 'ethereum', 'other'] }), networkOther: F('text', false),
   use: F('choice', true, { options: ['deposit', 'withdrawal', 'both'] }),
   ownershipOk: F('bool', true), riskOk: F('bool', true),
-  proofType: F('choice', true, { options: ['provider', 'explorer', 'other'] }), proofTypeOther: F('text', false),
 };
 const DECL = { repName: F('text', true), position: F('text', true), confirm: F('bool', true) };
-export const SCHEMA = { entity: ENTITY, contact: CONTACT, rep: REP, wallet: WALLET, decl: DECL };
+export const SCHEMA = { entity: ENTITY, wallet: WALLET, decl: DECL };
+/** 每一组的字段名（保存时用来保留旧版字段的数据） */
+export const FIELD_NAMES = { entity: Object.keys(ENTITY), wallet: Object.keys(WALLET), decl: Object.keys(DECL), person: Object.keys(PERSON) };
 
 /** 清洗单个字段：去掉未知字段、限制长度和类型。返回 [值, 错误码] */
 function clean(spec, v, { strict, today }) {
@@ -113,6 +119,8 @@ export function validateSection(section, input, { strict = false, now = Date.now
       const o = cleanGroup(PERSON, p, opts, `people.${i}`, errors);
       o.pid = typeof p?.pid === 'string' && /^[a-z0-9]{1,16}$/.test(p.pid) ? p.pid : String(i);
       if (strict && o.pep === 'yes' && !o.pepDetails) errors[`people.${i}.pepDetails`] = 'required';
+      // v7：授权联系人的邮箱、电话必填
+      if (strict && o.roles.includes('contact')) for (const k of ['email', 'phone']) if (!o[k]) errors[`people.${i}.${k}`] = 'required';
       // v4：只有 UBO 填写持股比例和投票权比例；不是 UBO 时清空，不保存
       if (o.roles.includes('ubo')) {
         for (const k of ['ownershipPct', 'votingPct']) if (strict && !o[k]) errors[`people.${i}.${k}`] = 'required';
@@ -120,7 +128,7 @@ export function validateSection(section, input, { strict = false, now = Date.now
       return o;
     });
     if (strict) {
-      if (!data.some((p) => p.roles.includes('director')) || !data.some((p) => p.roles.includes('ubo'))) errors.people = 'people';
+      if (!data.some((p) => p.roles.includes('director')) || !data.some((p) => p.roles.includes('ubo')) || data.filter((p) => p.roles.includes('contact')).length !== 1) errors.people = 'people';
     }
     return { data, errors };
   }
@@ -134,13 +142,63 @@ export function validateSection(section, input, { strict = false, now = Date.now
   return { data, errors };
 }
 
-/** 提交前的整体校验：全部步骤 + 必传文件 */
+/** 提交前的整体校验：全部步骤 + 每位人员的身份证明（v7：公司文件选传） */
 export function validateForSubmit(form, files, now = Date.now()) {
   const errors = {};
-  for (const s of ['entity', 'contact', 'rep', 'people', 'wallet', 'decl']) Object.assign(errors, validateSection(s, form?.[s], { strict: true, now }).errors);
-  const has = (doc, person) => files.some((f) => f.doc === doc && (person === undefined || f.person === person));
-  for (const d of COMPANY_DOCS_REQUIRED) if (!has(d)) errors[`docs.${d}`] = 'required';
-  for (const p of form?.people || []) for (const d of ['passport', 'poa']) if (!has(d, p.pid)) errors[`docs.${d}:${p.pid}`] = 'required';
-  if (!has('walletProof')) errors['docs.walletProof'] = 'required';
+  for (const s of SECTIONS) Object.assign(errors, validateSection(s, form?.[s], { strict: true, now }).errors);
+  for (const p of form?.people || []) if (!files.some((f) => f.doc === 'id' && f.person === p.pid)) errors[`docs.id:${p.pid}`] = 'required';
   return errors;
+}
+
+/**
+ * v7：把 v4 及以前格式的申请（填写中、被要求补件的）整理成 4 步的格式。只改 payload，返回是否有改动；已经是 v7 的不动。
+ * - ② 公司联系方式的官网、邮箱、电话 → ① 企业信息
+ * - ③ 授权联系人 → 一位人员，角色"授权联系人"（按邮箱或姓名找到已有的人员时，只加上这个角色）
+ * - 人员的护照号码、签发国、到期日 → 证件号码、签发国、到期日（证件类型记为护照）
+ * - 文件：护照 → 身份证明，公司文件项 d1～d16 → 公司文件；地址证明、钱包所有权证明保留但不再使用
+ * 删掉的字段和旧的步骤数据都保留，后台照常显示（需求说明书 v7 §2.3）
+ */
+export function upgradeToV7(payload) {
+  const form = payload.form || (payload.form = {});
+  if (form.v === FORM_VERSION) return false;
+  const entity = (form.entity = { ...(form.entity || {}) });
+  for (const k of ['website', 'email', 'phone']) if (entity[k] === undefined && form.contact?.[k] !== undefined) entity[k] = form.contact[k];
+  const people = (form.people = (Array.isArray(form.people) ? form.people : []).map((p) => {
+    const o = { ...p };
+    if (o.idNo === undefined && (o.passportNo !== undefined || o.passportCountry !== undefined || o.passportExpiry !== undefined)) {
+      o.idType = 'passport'; o.idNo = o.passportNo || ''; o.idCountry = o.passportCountry || ''; o.idExpiry = o.passportExpiry || '';
+    }
+    return o;
+  }));
+  const rep = form.rep;
+  if ((rep?.name || rep?.email) && !people.some((p) => (p.roles || []).includes('contact'))) {
+    const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase() && String(a || '').trim() !== '';
+    const hit = people.find((p) => same(p.email, rep.email)) || people.find((p) => same(p.fullName, rep.name));
+    if (hit) {
+      hit.roles = [...new Set([...(hit.roles || []), 'contact'])];
+      if (!hit.email) hit.email = rep.email || '';
+      if (!hit.phone) hit.phone = rep.phone || '';
+    } else {
+      const next = String(people.reduce((m, p) => Math.max(m, Number(p.pid) + 1 || 0), 0));
+      people.push({ pid: next, roles: ['contact'], fullName: rep.name || '', email: rep.email || '', phone: rep.phone || '' });
+    }
+  }
+  payload.files = (payload.files || []).map((f) => (f.doc === 'passport' ? { ...f, doc: 'id' } : /^d\d+$/.test(f.doc) ? { ...f, doc: 'company', legacyDoc: f.doc } : f));
+  form.v = FORM_VERSION;
+  return true;
+}
+
+/** v7：旧版补件时开放的步骤名 → 新步骤名 */
+export function mapUnlocked(sections = []) {
+  const map = { contact: ['entity'], rep: ['people'], docs: ['entity', 'people'] };
+  return [...new Set(sections.flatMap((s) => map[s] || [s]))].filter((s) => SECTIONS.includes(s));
+}
+
+/** v7：保存某一步时，把旧版字段（已删除的字段）的数据带过来，不丢。人员按 pid 对应 */
+export function keepLegacy(section, old, clean) {
+  const known = section === 'people' ? FIELD_NAMES.person : FIELD_NAMES[section];
+  const legacy = (o) => Object.fromEntries(Object.entries(o && typeof o === 'object' && !Array.isArray(o) ? o : {}).filter(([k]) => !known.includes(k) && k !== 'pid'));
+  if (section !== 'people') return { ...legacy(old), ...clean };
+  const byPid = new Map((Array.isArray(old) ? old : []).map((p) => [p?.pid, p]));
+  return clean.map((p) => ({ ...legacy(byPid.get(p.pid)), ...p }));
 }

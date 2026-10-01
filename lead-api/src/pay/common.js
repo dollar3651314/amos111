@@ -1,5 +1,5 @@
 // v6 收付款接口的公共工具：密钥派生、金额格式、错误响应、查询。
-import { hkdfSync } from 'node:crypto';
+import { hkdfSync, createHmac } from 'node:crypto';
 import { json } from '../kyb/http.js';
 import { PayError } from './core.js';
 import { fmtUsdt, parseUsdt } from './money.js';
@@ -8,7 +8,14 @@ import { fmtUsdt, parseUsdt } from './money.js';
 export function derivePayKeys(appSecret) {
   if (!appSecret || appSecret.length < 32) throw new Error('APP_SECRET missing or too short (need 32+ chars)');
   const k = (info) => Buffer.from(hkdfSync('sha256', Buffer.from(appSecret, 'utf8'), Buffer.from('quickcome-pay-v1'), Buffer.from(info), 32));
-  return { enc: k('enc'), session: k('session'), token: k('token') };
+  // search：客户邮箱的检索哈希（v7，L6）
+  return { enc: k('enc'), session: k('session'), token: k('token'), search: k('search') };
+}
+
+/** v7（L6）：客户邮箱的检索哈希。统一去掉首尾空格、转小写后做 HMAC；数据库里不存明文邮箱，没有密钥也算不出哈希 */
+export function emailHash(keys, email) {
+  const e = String(email ?? '').trim().toLowerCase();
+  return e ? createHmac('sha256', keys.search).update(e).digest('hex') : '';
 }
 
 /** 对外的金额一律是字符串，例如 "100.50"（开发者文档） */
