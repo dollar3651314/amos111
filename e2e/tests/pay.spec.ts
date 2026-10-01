@@ -339,6 +339,8 @@ test.describe.serial('TC-P v6 收付款（正式接口）', () => {
     await expect(admin.locator('[data-panel="p-recon"] tbody').first()).toContainText(new Date().toISOString().slice(0, 10));
     // 归集：地址都低于筛选金额时，说明有多少个地址被筛掉了
     await admin.click('[data-tab="p-sweep"]');
+    // 归集页前面已经打开过：点标签会重新读取并整页重画。先等读取完成，否则填在旧的输入框里，重画后就丢了
+    await admin.waitForLoadState('networkidle');
     await admin.locator('[data-panel="p-sweep"] .toolbar input').fill('100000');
     await admin.locator('[data-panel="p-sweep"] .toolbar input').press('Enter');
     await admin.locator('[data-panel="p-sweep"] .toolbar input').blur();
