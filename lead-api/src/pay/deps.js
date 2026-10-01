@@ -1,10 +1,10 @@
 // v6 收付款的公共初始化：生产（api/_pay.js）和本地服务器共用。同一个函数实例内只初始化一次。
 import { readFileSync } from 'node:fs';
 import { createPgDb, createLiteDb } from './db.js';
-import { migrate } from './schema.js';
+import { migrate, backfillEmailHash } from './schema.js';
 import { createTronGrid } from './trongrid.js';
 import { createFakeTron } from './fake-trongrid.js';
-import { derivePayKeys } from './common.js';
+import { derivePayKeys, emailHash } from './common.js';
 import { createOps } from './ops.js';
 import { createApiV1 } from './api-v1.js';
 import { createMerchantApi } from './merchant-api.js';
@@ -24,6 +24,7 @@ export async function createPayDeps({ config, kyb, send, getIp, origin }) {
   await migrate(db);
   const tron = config.fakeTron ? createFakeTron({ network: config.tronNetwork }) : createTronGrid({ network: config.tronNetwork, apiKey: config.tronApiKey, usdt: config.usdtContract || undefined });
   const keys = derivePayKeys(config.appSecret);
+  await backfillEmailHash(db, { decrypt: (s) => decryptJson(keys.enc, s), hash: (e) => emailHash(keys, e) }); // v7（L6）
   const keyPrefix = config.appEnv === 'production' ? 'qc_live_' : 'qc_test_';
   const ops = createOps({ db, keys, payBase: origin, keyPrefix });
   const gate = createAdminGate({ redis: kyb.redis, kybKeys: kyb.keys });
@@ -37,7 +38,7 @@ export async function createPayDeps({ config, kyb, send, getIp, origin }) {
   const pendingKyb = kyb.pendingKyb || (async () => 0);
   return {
     db, tron, keys, ops, wallets,
-    v1: createApiV1({ db, keys, ops, getIp }),
+    v1: createApiV1({ db, keys, ops, getIp, redis: kyb.redis }), // v7（L5）：限流计数和开户共用同一个 Redis
     merchant: createMerchantApi({ db, keys, ops, send }),
     pay: createPayApi({ db }),
     wallet: createWalletApi({ db, tron, keys, wallets, send, origin, notify, listApproved, pendingKyb, runDaily: () => runDaily({ db, tron, wallets, notify }), ...gate }),

@@ -1,4 +1,4 @@
-// 开户填写页面的交互逻辑（v3）。
+// 开户填写页面的交互逻辑（v3；v7 改为 4 步：企业信息、人员、钱包授权、声明与签名）。
 // - 正式模式：通过 /api/kyb/?g=onboarding&a=<动作> 读写本人申请（令牌来自链接里的 ?t=）。
 // - 原型模式（Vercel 预览环境）：使用内置的模拟接口，不调用后端，也不发送任何数据。
 
@@ -7,7 +7,7 @@ import { kybUrl } from './kyb-url';
 type Cfg = {
   prototype: boolean; lang: string; maxBytes: number;
   errors: Record<string, string>; nav: Record<string, string>;
-  s4: { person: string }; s5: Record<string, string>; roles: Record<string, string>;
+  person: string; files: Record<string, string>; maxCompanyFiles: number; maxIdFiles: number;
   locked?: string;
 };
 type FileRec = { id: string; name: string; size: number; doc: string; person?: string };
@@ -29,13 +29,15 @@ const btnSave = form.querySelector<HTMLButtonElement>('[data-save]')!;
 const btnSubmit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
 const peopleList = document.getElementById('people-list')!;
 const personTpl = document.getElementById('person-tpl') as HTMLTemplateElement;
-const personDocs = document.getElementById('person-docs')!;
 const done = root.querySelector<HTMLElement>('[data-ob-done]')!;
 const invalid = root.querySelector<HTMLElement>('[data-ob-invalid]')!;
 
 /** 步骤序号 → 服务端的分组名 */
-const STEP_SECTION = ['entity', 'contact', 'rep', 'people', 'docs', 'wallet', 'decl'];
-const SAVE_SECTIONS = new Set(['entity', 'contact', 'rep', 'people', 'wallet', 'decl']);
+const STEP_SECTION = ['entity', 'people', 'wallet', 'decl'];
+const SAVE_SECTIONS = new Set(STEP_SECTION);
+const SIGN_STEP = 3;
+/** 文件属于哪一步：公司文件在 ① 企业信息，身份证明在 ② 人员 */
+const fileSection = (doc: string) => (doc === 'company' ? 'entity' : 'people');
 let current = 0;
 let personSeq = 0;
 let editable = new Set(STEP_SECTION);
@@ -170,25 +172,31 @@ function validateField(f: HTMLElement): boolean {
   const name = f.dataset.field!;
   let msg = '';
   const empty = Array.isArray(v) ? v.length === 0 : v === '' || v === false;
-  if (f.dataset.required && empty) msg = cfg.errors.required;
+  if ((f.dataset.required || requiredForContact(f)) && empty) msg = cfg.errors.required;
   else if (!empty && type === 'email' && !EMAIL_RE.test(String(v))) msg = cfg.errors.email;
   else if (!empty && type === 'tel' && !PHONE_RE.test(String(v))) msg = cfg.errors.phone;
   else if (!empty && type === 'date' && Number.isNaN(Date.parse(String(v)))) msg = cfg.errors.date;
   else if (!empty && type === 'percent' && !PCT_RE.test(String(v))) msg = cfg.errors.percent;
-  else if (!empty && name.endsWith('.passportExpiry') && String(v) <= new Date().toISOString().slice(0, 10)) msg = cfg.errors.future;
+  else if (!empty && name.endsWith('.idExpiry') && String(v) <= new Date().toISOString().slice(0, 10)) msg = cfg.errors.future;
   const otherInput = f.querySelector<HTMLInputElement>(`[data-other-for="${name}"]`);
   if (!msg && otherInput && !otherInput.hidden && !otherInput.value.trim()) msg = cfg.errors.required;
   setErr(f, msg);
   return !msg;
+}
+/** v7：人员的邮箱、电话只有授权联系人必填 */
+function requiredForContact(f: HTMLElement): boolean {
+  const m = /^people\.([^.]+)\.(email|phone)$/.exec(f.dataset.field || '');
+  if (!m) return false;
+  return !!form.querySelector<HTMLInputElement>(`input[name="people.${m[1]}.roles"][value="contact"]:checked`);
 }
 function validateStep(i: number): boolean {
   const sec = steps[i];
   if (!editable.has(STEP_SECTION[i])) return true; // 补件时锁定的部分不再校验
   let ok = true;
   for (const f of sec.querySelectorAll<HTMLElement>('[data-field]')) if (!validateField(f)) ok = false;
-  if (i === 3) ok = validatePeople() && ok;
-  if (i === 4 || i === 5) ok = validateDocs(sec) && ok;
-  if (i === 6) ok = validateSignature() && ok;
+  // 人员和身份证明的错误一次全部显示（不要因为前一项不通过就跳过后一项）
+  if (i === 1) { const peopleOk = validatePeople(); const docsOk = validateDocs(sec); ok = peopleOk && docsOk && ok; }
+  if (i === SIGN_STEP) ok = validateSignature() && ok;
   showAlert(ok ? '' : cfg.errors.summary);
   if (!ok) sec.querySelector<HTMLElement>('[aria-invalid="true"], .err:not(:empty)')?.scrollIntoView({ block: 'center' });
   return ok;
@@ -200,7 +208,6 @@ form.addEventListener('change', (e) => {
   if (!f) return;
   syncOther(f);
   const name = f.dataset.field!;
-  if (name.endsWith('.roles') || name.endsWith('.fullName')) renderPersonDocs();
   if (f.querySelector('.err:not(:empty)')) validateField(f);
 });
 form.addEventListener('input', (e) => {
@@ -218,13 +225,14 @@ function addPerson(pid?: string) {
   node.dataset.person = id;
   peopleList.appendChild(node);
   numberPeople();
-  renderPersonDocs();
+  renderFiles(docKey('id', id));
+  applyLocks();
   return node;
 }
 function numberPeople() {
   const cards = [...peopleList.querySelectorAll<HTMLElement>('[data-person]')];
   cards.forEach((c, n) => {
-    c.querySelector('[data-person-title]')!.textContent = `${cfg.s4.person} ${n + 1}`;
+    c.querySelector('[data-person-title]')!.textContent = `${cfg.person} ${n + 1}`;
     c.querySelector<HTMLElement>('[data-remove-person]')!.hidden = cards.length === 1 || !editable.has('people');
   });
 }
@@ -235,7 +243,6 @@ peopleList.addEventListener('click', (e) => {
   files = files.filter((f) => f.person !== card.dataset.person); // 服务端保存"人员"时会同步删除该人员的文件
   card.remove();
   numberPeople();
-  renderPersonDocs();
 });
 form.querySelector('[data-add-person]')!.addEventListener('click', () => addPerson());
 function people() {
@@ -249,52 +256,27 @@ function people() {
 function validatePeople(): boolean {
   const ps = people();
   const out = form.querySelector<HTMLElement>('[data-err-for="people"]')!;
-  const ok = ps.some((p) => p.roles.includes('director')) && ps.some((p) => p.roles.includes('ubo'));
+  const ok = ps.some((p) => p.roles.includes('director')) && ps.some((p) => p.roles.includes('ubo')) && ps.filter((p) => p.roles.includes('contact')).length === 1;
   out.textContent = ok ? '' : cfg.errors.people;
   return ok;
 }
 
 // ---------- 文件 ----------
 const docKey = (doc: string, person?: string) => (person ? `${doc}:${person}` : doc);
-function renderPersonDocs() {
-  const ps = people();
-  personDocs.innerHTML = '';
-  ps.forEach((p, n) => {
-    for (const doc of ['passport', 'poa']) {
-      const key = docKey(doc, p.id);
-      const row = document.createElement('div');
-      row.className = 'doc-row';
-      row.dataset.doc = key;
-      row.dataset.docRequired = '1';
-      const roleText = p.roles.map((r) => cfg.roles[r]).join(' / ') || '—';
-      row.innerHTML = `<div><div class="name"></div><span class="badge req-b"></span></div>
-        <label class="btn btn-outline upload-btn"><span></span><input type="file" accept="application/pdf,image/jpeg,image/png" multiple /></label>
-        <div class="files"></div>`;
-      row.querySelector('input')!.dataset.upload = key;
-      row.querySelector<HTMLElement>('.files')!.dataset.files = key;
-      row.querySelector('.name')!.textContent = `${p.name || cfg.s4.person + ' ' + (n + 1)} (${roleText}) · ${cfg.s5[doc]}`;
-      row.querySelector('.badge')!.textContent = cfg.s5.required;
-      row.querySelector('label span')!.textContent = cfg.s5.upload;
-      personDocs.appendChild(row);
-      renderFiles(key);
-    }
-  });
-  applyLocks();
-}
 const fmtSize = (n: number) => (n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 function renderFiles(key: string) {
   const box = form.querySelector<HTMLElement>(`[data-files="${CSS.escape(key)}"]`);
   if (!box) return;
   box.innerHTML = '';
-  const section = key === 'walletProof' ? 'wallet' : 'docs';
+  const section = fileSection(key.split(':')[0]);
   for (const f of files.filter((x) => docKey(x.doc, x.person) === key)) {
     const chip = document.createElement('div');
     chip.className = 'file-chip';
     chip.innerHTML = '<span class="fname"></span><span class="ok"></span><button type="button" class="link-btn"></button>';
     chip.querySelector('.fname')!.textContent = `${f.name} · ${fmtSize(f.size)}`;
-    chip.querySelector('.ok')!.textContent = '✓ ' + cfg.s5.uploaded;
+    chip.querySelector('.ok')!.textContent = '✓ ' + cfg.files.uploaded;
     const rm = chip.querySelector('button')!;
-    rm.textContent = cfg.s5.remove;
+    rm.textContent = cfg.files.remove;
     rm.hidden = !editable.has(section);
     rm.addEventListener('click', async () => {
       rm.disabled = true;
@@ -313,7 +295,9 @@ form.addEventListener('change', async (e) => {
   const row = input.closest<HTMLElement>('.doc-row')!;
   // 上传人员文件前，先保存人员（服务端要求文件属于已保存的人员）
   if (person && !cfg.prototype) await api.save('people', readSection('people')).catch(() => {});
+  const limit = doc === 'company' ? cfg.maxCompanyFiles : cfg.maxIdFiles;
   for (const file of [...input.files]) {
+    if (files.filter((f) => docKey(f.doc, f.person) === key).length >= limit) { showRowError(row, cfg.errors.tooMany.replace('{n}', String(limit))); break; }
     const bad = !['application/pdf', 'image/jpeg', 'image/png'].includes(file.type) ? cfg.errors.fileType : file.size > cfg.maxBytes ? cfg.errors.fileSize : '';
     if (bad) { showRowError(row, `${file.name}: ${bad}`); continue; }
     const chip = document.createElement('div');
@@ -329,7 +313,7 @@ form.addEventListener('change', async (e) => {
     } catch (err) {
       chip.remove();
       const code = (err as ApiError).body?.error;
-      showRowError(row, `${file.name}: ${code === 'file_size' ? cfg.errors.fileSize : code === 'file_type' ? cfg.errors.fileType : cfg.errors.summary}`);
+      showRowError(row, `${file.name}: ${code === 'file_size' ? cfg.errors.fileSize : code === 'file_type' ? cfg.errors.fileType : code === 'too_many_files' ? cfg.errors.tooMany.replace('{n}', String(limit)) : cfg.errors.summary}`);
     }
     renderFiles(key);
   }
@@ -344,10 +328,8 @@ function validateDocs(sec: HTMLElement): boolean {
   let ok = true;
   for (const row of sec.querySelectorAll<HTMLElement>('[data-doc-required]')) {
     const has = files.some((f) => docKey(f.doc, f.person) === row.dataset.doc);
-    if (!has) { ok = false; showRowError(row, cfg.errors.required); } else row.querySelector('.row-err')?.remove();
+    if (!has) { ok = false; showRowError(row, cfg.errors.idDoc); } else row.querySelector('.row-err')?.remove();
   }
-  const out = sec.querySelector<HTMLElement>('[data-err-for="docs"]');
-  if (out) out.textContent = ok ? '' : cfg.errors.docs;
   return ok;
 }
 
@@ -404,9 +386,22 @@ function show(i: number) {
   btnSubmit.hidden = i !== steps.length - 1;
   btnSave.hidden = !SAVE_SECTIONS.has(STEP_SECTION[i]) || !editable.has(STEP_SECTION[i]);
   showAlert('');
-  if (i === 4) renderPersonDocs();
-  if (i === 6) requestAnimationFrame(sizeCanvas);
+  prefill(i);
+  if (i === SIGN_STEP) requestAnimationFrame(sizeCanvas);
   window.scrollTo({ top: 0 });
+}
+/** v7：钱包的法定全称、邮箱带出第 1 步；签名的授权代表带出授权联系人。只在为空时带出，可以改 */
+function prefill(i: number) {
+  const fill = (name: string, v: string) => {
+    const input = form.querySelector<HTMLInputElement>(`[name="${name}"]`);
+    if (input && !input.value.trim() && v && editable.has(name.split('.')[0])) input.value = v;
+  };
+  const val = (name: string) => (form.querySelector<HTMLInputElement>(`[name="${name}"]`)?.value || '').trim();
+  if (STEP_SECTION[i] === 'wallet') { fill('wallet.clientName', val('entity.legalName')); fill('wallet.email', val('entity.email')); }
+  if (STEP_SECTION[i] === 'decl') {
+    const contact = people().find((p) => p.roles.includes('contact'));
+    if (contact) fill('decl.repName', contact.name);
+  }
 }
 async function save(i = current) {
   const section = STEP_SECTION[i];
@@ -421,7 +416,7 @@ async function save(i = current) {
     return false;
   } finally { btnSave.disabled = false; }
 }
-/** 服务端返回的字段错误：显示在对应字段旁（例如 "entity.legalName"、"people.0.dob"、"docs.d1"） */
+/** 服务端返回的字段错误：显示在对应字段旁（例如 "entity.legalName"、"people.0.dob"、"docs.id:0"） */
 function showServerErrors(fields?: Record<string, string>) {
   if (!fields) { showAlert(cfg.errors.summary); return; }
   let firstStep = -1;
@@ -429,8 +424,9 @@ function showServerErrors(fields?: Record<string, string>) {
     const msg = cfg.errors[code] || cfg.errors.required;
     const f = form.querySelector<HTMLElement>(`[data-field="${CSS.escape(k)}"]`);
     if (f) setErr(f, msg);
-    const [grp] = k.split('.');
-    const step = grp === 'signature' ? 6 : STEP_SECTION.indexOf(grp);
+    const [grp, rest = ''] = k.split('.');
+    if (grp === 'docs') { const row = form.querySelector<HTMLElement>(`[data-doc="${CSS.escape(rest)}"]`); if (row) showRowError(row, rest.startsWith('id:') ? cfg.errors.idDoc : msg); }
+    const step = grp === 'signature' ? SIGN_STEP : grp === 'docs' ? (rest.startsWith('id:') ? 1 : 0) : STEP_SECTION.indexOf(grp);
     if (step >= 0 && (firstStep < 0 || step < firstStep)) firstStep = step;
   }
   if (firstStep >= 0 && firstStep !== current) show(firstStep);
@@ -460,7 +456,16 @@ btnSubmit.addEventListener('click', async () => {
   try {
     if (!cfg.prototype && !token) throw new Error('no token');
     st = await api.load();
-  } catch {
+  } catch (err) {
+    // 只有链接确实无效（404）时才说"链接无效"；服务器出错或网络断开时提示重试，不要让客户以为链接坏了
+    const status = (err as ApiError).status;
+    if (token && status !== 404) {
+      invalid.textContent = cfg.errors.loadFailed + ' ';
+      const retry = document.createElement('button');
+      retry.type = 'button'; retry.className = 'btn btn-outline btn-sm'; retry.textContent = cfg.errors.retry;
+      retry.addEventListener('click', () => location.reload());
+      invalid.appendChild(retry);
+    }
     invalid.hidden = false;
     return;
   }
@@ -472,12 +477,11 @@ btnSubmit.addEventListener('click', async () => {
   uploadMode = st.uploadMode || null;
   uploadPrefix = st.uploadPrefix || '';
   const f = st.form || {};
-  for (const g of ['entity', 'contact', 'rep', 'wallet', 'decl']) fillGroup(form, g, f[g]);
+  for (const g of ['entity', 'wallet', 'decl']) fillGroup(form, g, f[g]);
   const ppl: any[] = Array.isArray(f.people) && f.people.length ? f.people : [{ pid: '0' }];
+  files = st.files || []; // 先放好文件，添加人员时会显示各自的身份证明
   for (const p of ppl) { const card = addPerson(String(p.pid)); fillGroup(card, `people.${p.pid}`, p); }
-  files = st.files || [];
-  for (const key of ['walletProof', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd10', 'd13', 'd14', 'd15', 'd16']) renderFiles(key);
-  renderPersonDocs();
+  renderFiles('company');
   applyLocks();
   form.hidden = false;
   const first = STEP_SECTION.findIndex((s) => editable.has(s));

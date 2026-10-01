@@ -97,7 +97,7 @@ export function createAdminHandler({ repo, blobs, send, redis, keys, config, now
       const p = repo.open(a);
       return json(200, {
         app: { ...summary(a), invitedAt: a.invitedAt, decidedAt: a.decidedAt, relationshipEndedAt: a.relationshipEndedAt, unlocked: a.unlocked, email: p.email },
-        form: p.form, files: p.files.map(({ id, doc, person, name, size, type, uploadedAt }) => ({ id, doc, person, name, size, type, uploadedAt })),
+        form: p.form, files: p.files.map(({ id, doc, legacyDoc, person, name, size, type, uploadedAt }) => ({ id, doc, legacyDoc, person, name, size, type, uploadedAt })),
         signature: p.signature ? { signedAt: p.signature.signedAt, ip: p.signature.ip } : null, review: p.review, audit: await repo.auditLog(a.id),
       });
     },

@@ -91,7 +91,7 @@ export async function getMerchant(q, id) {
 
 // ---------- 客户 ----------
 /** 取得客户；不存在时创建，并在同一个事务里推导一个新地址（序号加 1） */
-export async function ensureCustomer(t, merchantId, customerId, { name = '', emailEnc = '' } = {}) {
+export async function ensureCustomer(t, merchantId, customerId, { name = '', emailEnc = '', emailHash = '' } = {}) {
   if (!CUSTOMER_RE.test(customerId || '')) throw new PayError('invalid_param', 422, 'customer_id');
   const [found] = await t.query('select * from customers where merchant_id = $1 and customer_id = $2', [merchantId, customerId]);
   if (found) return found;
@@ -101,8 +101,8 @@ export async function ensureCustomer(t, merchantId, customerId, { name = '', ema
     on conflict (key) do update set value = to_jsonb((pay_meta.value)::text::int + 1), updated_at = now() returning value`);
   const index = Number(n.value) - 1;
   const address = deriveAddress(xpub, index);
-  const [c] = await t.query(`insert into customers (merchant_id, customer_id, name, email_enc, address, hd_index) values ($1, $2, $3, $4, $5, $6)
-    on conflict (merchant_id, customer_id) do nothing returning *`, [merchantId, customerId, String(name).slice(0, 200), emailEnc, address, index]);
+  const [c] = await t.query(`insert into customers (merchant_id, customer_id, name, email_enc, email_hash, address, hd_index) values ($1, $2, $3, $4, $5, $6, $7)
+    on conflict (merchant_id, customer_id) do nothing returning *`, [merchantId, customerId, String(name).slice(0, 200), emailEnc, emailHash, address, index]);
   if (c) return c;
   // 并发时另一个请求先建好了：用那一条（这次推导的序号作废，不影响任何人的资金）
   const [again] = await t.query('select * from customers where merchant_id = $1 and customer_id = $2', [merchantId, customerId]);
@@ -137,13 +137,13 @@ async function refreshUnmatched(t, merchantId, customerId) {
     where merchant_id = $1 and customer_id = $2`, [merchantId, customerId]);
 }
 
-export async function createOrder(db, merchant, { customerId, customerName = '', customerEmailEnc = '', merchantOrderNo, amount }) {
+export async function createOrder(db, merchant, { customerId, customerName = '', customerEmailEnc = '', customerEmailHash = '', merchantOrderNo, amount }) {
   const mode = merchant.order_mode;
   if (!mode.enabled) throw new PayError('order_mode_disabled', 403);
   if (!ORDER_NO_RE.test(merchantOrderNo || '')) throw new PayError('invalid_param', 422, 'merchant_order_no');
   if (!Number.isInteger(amount) || amount <= 0) throw new PayError('invalid_param', 422, 'amount');
   return db.tx(async (t) => {
-    const c = await ensureCustomer(t, merchant.id, customerId, { name: customerName, emailEnc: customerEmailEnc });
+    const c = await ensureCustomer(t, merchant.id, customerId, { name: customerName, emailEnc: customerEmailEnc, emailHash: customerEmailHash });
     await lockCustomer(t, merchant.id, customerId);
     const id = newId.order();
     const now = new Date();

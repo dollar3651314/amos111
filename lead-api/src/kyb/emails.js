@@ -1,8 +1,10 @@
 // v3 的邮件模板。所有邮件都是纯文本，中英双语；通知 Amos 的邮件不包含任何敏感字段（AC-K7）。
+// v7：4 个步骤；contact、rep、docs 是 v4 的旧步骤名，只用于旧记录
 export const SECTION_LABELS = {
-  entity: ['Entity information', '企业信息'], contact: ['Company contact details', '公司联系方式'],
-  rep: ['Authorized contact person', '授权联系人'], people: ['Directors / UBOs / signatories', '董事 / UBO / 授权签字人'],
-  docs: ['Supporting documents', '证明文件'], wallet: ['Wallet authorization', '钱包授权声明'], decl: ['Declaration and signature', '声明与签名'],
+  entity: ['Company information and documents', '企业信息和公司文件'],
+  people: ['People (directors, UBOs, signatories, authorized contact) and ID documents', '人员（董事、UBO、授权签字人、授权联系人）和身份证明'],
+  wallet: ['Wallet authorization', '钱包授权声明'], decl: ['Declaration and signature', '声明与签名'],
+  contact: ['Company contact details', '公司联系方式'], rep: ['Authorized contact person', '授权联系人'], docs: ['Supporting documents', '证明文件'],
 };
 const day = (iso) => String(iso).slice(0, 10);
 
