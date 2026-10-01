@@ -70,6 +70,8 @@
 .doc-row .name { font-weight: 500; }
 .doc-row .files { grid-column: 1 / -1; display: grid; gap: 6px; }
 .doc-row .files:empty { display: none; }
+/* v7：手机上上传按钮放到说明下面，不把说明挤成窄条 */
+@media (max-width: 560px) { .doc-row { grid-template-columns: minmax(0, 1fr); } .doc-row .upload-btn { justify-self: start; } }
 .file-chip { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; background: var(--bg-soft); border-radius: 8px; padding: 6px 10px; }
 .file-chip .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-chip .ok { color: var(--accent); font-weight: 600; }

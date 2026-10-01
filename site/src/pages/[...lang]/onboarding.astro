@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import Field from '../../components/app/Field.astro';
 import { langStaticPaths, type Lang } from '../../lib/i18n';
-import { o, onboardingHref, COMPANY_DOCS, ACCEPT, MAX_FILE_BYTES } from '../../lib/onboarding';
+import { o, onboardingHref, ACCEPT, MAX_FILE_BYTES, MAX_COMPANY_FILES, MAX_ID_FILES } from '../../lib/onboarding';
 import { IS_PROTOTYPE } from '../../lib/env';
 export const getStaticPaths = langStaticPaths;
 const { lang } = Astro.props as { lang: Lang };
@@ -17,9 +17,10 @@ const clientConfig = {
   maxBytes: MAX_FILE_BYTES,
   errors: c.errors,
   nav: c.nav,
-  s4: { person: c.s4.person },
-  s5: { passport: c.s5.passport, poa: c.s5.poa, uploaded: c.s5.uploaded, remove: c.s5.remove, upload: c.s5.upload, required: c.required },
-  roles: c.s4.roleOptions,
+  person: c.s2.person,
+  files: { ...c.files, required: c.required, idDoc: c.s2.idDoc },
+  maxCompanyFiles: MAX_COMPANY_FILES,
+  maxIdFiles: MAX_ID_FILES,
   locked: c.locked,
 };
 ---
@@ -49,7 +50,7 @@ const clientConfig = {
 
       <div class="alert" data-ob-alert role="alert" hidden></div>
 
-      <!-- ① 企业信息 -->
+      <!-- ① 企业信息（v7：并入公司联系方式；末尾是选传的公司文件） -->
       <section class="card form-card" data-step="0">
         <p class="step-label" data-step-label></p>
         <h2>{c.s1.title}</h2>
@@ -62,8 +63,6 @@ const clientConfig = {
           <Field name="entity.incPlace" label={c.s1.incPlace} required {...common} />
           <Field name="entity.regAddress" label={c.s1.regAddress} type="textarea" required span {...common} />
           <Field name="entity.physAddress" label={c.s1.physAddress} type="textarea" required span {...common} />
-          <Field name="entity.lei" label={c.s1.lei} {...common} />
-          <Field name="entity.tin" label={c.s1.tin} {...common} />
           <Field name="entity.nature" label={c.s1.nature} type="checkboxes" options={opts(c.s1.natureOptions)} required span {...common} />
           <Field name="entity.purpose" label={c.s1.purpose} hint={c.s1.purposeHint} type="checkboxes" options={opts(c.s1.purposeOptions)} required span {...common} />
           <Field name="entity.volume" label={c.s1.volume} type="radios" options={opts(c.s1.volumeOptions)} required span {...common} />
@@ -76,155 +75,116 @@ const clientConfig = {
           <div class="span-all" data-cond="sanctions-details" hidden>
             <Field name="entity.sanctionsDetails" label={c.s1.sanctionsDetails} type="textarea" required span {...common} />
           </div>
-          <Field name="entity.parent" label={c.s1.parent} span {...common} />
+        </div>
+        <h3 class="doc-section-title">{c.s1.contactTitle}</h3>
+        <div class="fgrid">
+          <Field name="entity.website" label={c.s1.website} required {...common} />
+          <Field name="entity.email" label={c.s1.email} type="email" required {...common} />
+          <Field name="entity.phone" label={c.s1.phone} type="tel" required {...common} />
+        </div>
+        <h3 class="doc-section-title">{c.s1.docsTitle}</h3>
+        <p class="hint" data-company-docs-hint>{c.s1.docsHint}</p>
+        <div class="doc-list">
+          <div class="doc-row" data-doc="company">
+            <div><div class="name">{c.s1.docsRow}</div><span class="badge">{c.optional}</span></div>
+            <label class="btn btn-outline upload-btn">{c.files.upload}<input type="file" accept={ACCEPT} multiple data-upload="company" /></label>
+            <div class="files" data-files="company"></div>
+          </div>
         </div>
       </section>
 
-      <!-- ② 公司联系方式 -->
+      <!-- ② 人员（v7：授权联系人是一个角色；每人上传身份证明） -->
       <section class="card form-card" data-step="1" hidden>
         <p class="step-label" data-step-label></p>
         <h2>{c.s2.title}</h2>
-        <div class="fgrid">
-          <Field name="contact.website" label={c.s2.website} required {...common} />
-          <Field name="contact.email" label={c.s2.email} type="email" required {...common} />
-          <Field name="contact.phone" label={c.s2.phone} type="tel" required {...common} />
-          <Field name="contact.otherContact" label={c.s2.otherContact} {...common} />
-        </div>
-      </section>
-
-      <!-- ③ 授权联系人 -->
-      <section class="card form-card" data-step="2" hidden>
-        <p class="step-label" data-step-label></p>
-        <h2>{c.s3.title}</h2>
-        <div class="fgrid">
-          <Field name="rep.name" label={c.s3.name} required span {...common} />
-          <Field name="rep.email" label={c.s3.email} type="email" required {...common} />
-          <Field name="rep.phone" label={c.s3.phone} type="tel" required {...common} />
-          <Field name="rep.otherContact" label={c.s3.otherContact} span {...common} />
-        </div>
-      </section>
-
-      <!-- ④ 人员 -->
-      <section class="card form-card" data-step="3" hidden>
-        <p class="step-label" data-step-label></p>
-        <h2>{c.s4.title}</h2>
-        <p class="lead-sm">{c.s4.body}</p>
+        <p class="lead-sm">{c.s2.body}</p>
         <div class="err" data-err-for="people" role="alert"></div>
         <div id="people-list" class="stack"></div>
-        <button type="button" class="btn btn-ghost" data-add-person>+ {c.s4.add}</button>
+        <button type="button" class="btn btn-ghost" data-add-person>+ {c.s2.add}</button>
         <template id="person-tpl">
           <div class="person-card" data-person>
-            <header><h3><span data-person-title>{c.s4.person}</span></h3><button type="button" class="link-btn" data-remove-person>{c.s4.remove}</button></header>
+            <header><h3><span data-person-title>{c.s2.person}</span></h3><button type="button" class="link-btn" data-remove-person>{c.s2.remove}</button></header>
             <div class="fgrid">
-              <Field name="people.__i__.roles" label={c.s4.roles} type="checkboxes" options={opts(c.s4.roleOptions)} required span {...common} />
-              <Field name="people.__i__.fullName" label={c.s4.fullName} required span {...common} />
-              <Field name="people.__i__.dob" label={c.s4.dob} type="date" required {...common} />
-              <Field name="people.__i__.nationality" label={c.s4.nationality} required {...common} />
-              <Field name="people.__i__.residence" label={c.s4.residence} required {...common} />
-              <Field name="people.__i__.address" label={c.s4.address} type="textarea" required span {...common} />
-              <Field name="people.__i__.passportNo" label={c.s4.passportNo} required {...common} />
-              <Field name="people.__i__.passportCountry" label={c.s4.passportCountry} required {...common} />
-              <Field name="people.__i__.passportExpiry" label={c.s4.passportExpiry} type="date" required {...common} />
+              <Field name="people.__i__.roles" label={c.s2.roles} type="checkboxes" options={opts(c.s2.roleOptions)} required span {...common} />
+              <Field name="people.__i__.fullName" label={c.s2.fullName} required span {...common} />
+              <Field name="people.__i__.dob" label={c.s2.dob} type="date" required {...common} />
+              <Field name="people.__i__.nationality" label={c.s2.nationality} required {...common} />
+              <Field name="people.__i__.address" label={c.s2.address} type="textarea" required span {...common} />
+              <Field name="people.__i__.idType" label={c.s2.idType} type="radios" options={opts(c.s2.idTypeOptions)} required span {...common} />
+              <Field name="people.__i__.idNo" label={c.s2.idNo} required {...common} />
+              <Field name="people.__i__.idCountry" label={c.s2.idCountry} required {...common} />
+              <Field name="people.__i__.idExpiry" label={c.s2.idExpiry} type="date" required {...common} />
               <div class="span-all fgrid" data-ubo-fields hidden>
-                <Field name="people.__i__.ownershipPct" label={c.s4.ownershipPct} type="percent" hint={c.s4.pctHint} required {...common} />
-                <Field name="people.__i__.votingPct" label={c.s4.votingPct} type="percent" required {...common} />
+                <Field name="people.__i__.ownershipPct" label={c.s2.ownershipPct} type="percent" hint={c.s2.pctHint} required {...common} />
+                <Field name="people.__i__.votingPct" label={c.s2.votingPct} type="percent" required {...common} />
               </div>
-              <Field name="people.__i__.pep" label={c.s4.pep} type="radios" options={yesNo} required span {...common} />
+              <Field name="people.__i__.pep" label={c.s2.pep} type="radios" options={yesNo} required span {...common} />
               <div class="span-all" data-pep-details hidden>
-                <Field name="people.__i__.pepDetails" label={c.s4.pepDetails} type="textarea" required span {...common} />
+                <Field name="people.__i__.pepDetails" label={c.s2.pepDetails} type="textarea" required span {...common} />
               </div>
-              <Field name="people.__i__.email" label={c.s4.email} type="email" required {...common} />
-              <Field name="people.__i__.phone" label={c.s4.phone} type="tel" required {...common} />
+              <Field name="people.__i__.email" label={c.s2.email} type="email" hint={c.s2.contactHint} {...common} />
+              <Field name="people.__i__.phone" label={c.s2.phone} type="tel" hint={c.s2.contactHint} {...common} />
+              <div class="span-all doc-list">
+                <div class="doc-row" data-doc="id:__i__" data-doc-required="1">
+                  <div><div class="name">{c.s2.idDoc}</div><span class="badge req-b">{c.required}</span><p class="hint m0">{c.s2.idDocHint}</p></div>
+                  <label class="btn btn-outline upload-btn">{c.files.upload}<input type="file" accept={ACCEPT} multiple data-upload="id:__i__" /></label>
+                  <div class="files" data-files="id:__i__"></div>
+                </div>
+              </div>
             </div>
           </div>
         </template>
       </section>
 
-      <!-- ⑤ 文件 -->
-      <section class="card form-card" data-step="4" hidden>
+      <!-- ③ 钱包授权声明（v7：法定全称、邮箱自动带出第 1 步） -->
+      <section class="card form-card" data-step="2" hidden>
         <p class="step-label" data-step-label></p>
-        <h2>{c.s5.title}</h2>
-        <p class="lead-sm">{c.s5.body}</p>
-        <div class="err" data-err-for="docs" role="alert"></div>
-        <h3 class="doc-section-title">{c.s5.company}</h3>
-        <div class="doc-list">
-          {COMPANY_DOCS.map((d, i) => (
-            <div class="doc-row" data-doc={d.id} data-doc-required={d.required ? '1' : undefined}>
-              <div>
-                <div class="name">{(c.s5.docs as Record<string, string>)[d.id]}</div>
-                <span class={`badge ${d.required ? 'req-b' : ''}`}>{d.required ? c.required : c.optional}</span>
-              </div>
-              <label class="btn btn-outline upload-btn">{c.s5.upload}<input type="file" accept={ACCEPT} multiple data-upload={d.id} /></label>
-              <div class="files" data-files={d.id}></div>
-            </div>
-          ))}
-        </div>
-        <h3 class="doc-section-title">{c.s5.people}</h3>
-        <div class="doc-list" id="person-docs"></div>
-        <p class="hint muted">{c.s5.note}</p>
-      </section>
-
-      <!-- ⑥ 钱包授权声明 -->
-      <section class="card form-card" data-step="5" hidden>
-        <p class="step-label" data-step-label></p>
-        <h2>{c.s6.title}</h2>
-        <p class="lead-sm">{c.s6.body}</p>
+        <h2>{c.s3.title}</h2>
+        <p class="lead-sm">{c.s3.body}</p>
         <div class="fgrid">
-          <Field name="wallet.clientName" label={c.s6.clientName} required {...common} />
-          <Field name="wallet.idTypeNo" label={c.s6.idTypeNo} hint={c.s6.idHint} required {...common} />
-          <Field name="wallet.userId" label={c.s6.userId} {...common} />
-          <Field name="wallet.email" label={c.s6.email} type="email" required {...common} />
-          <Field name="wallet.address" label={c.s6.wallet} required span {...common} />
-          <Field name="wallet.network" label={c.s6.network} type="radios" options={opts(c.s6.networkOptions)} required {...common} />
-          <Field name="wallet.use" label={c.s6.use} type="radios" options={opts(c.s6.useOptions)} required {...common} />
+          <Field name="wallet.clientName" label={c.s3.clientName} hint={c.s3.prefill} required {...common} />
+          <Field name="wallet.email" label={c.s3.email} type="email" hint={c.s3.prefill} required {...common} />
+          <Field name="wallet.address" label={c.s3.wallet} required span {...common} />
+          <Field name="wallet.network" label={c.s3.network} type="radios" options={opts(c.s3.networkOptions)} required {...common} />
+          <Field name="wallet.use" label={c.s3.use} type="radios" options={opts(c.s3.useOptions)} required {...common} />
         </div>
         <div class="declaration-box">
-          <strong>{c.s6.ownershipTitle}</strong>
-          <ol>{c.s6.ownership.map((x) => <li>{x}</li>)}</ol>
+          <strong>{c.s3.ownershipTitle}</strong>
+          <ol>{c.s3.ownership.map((x) => <li>{x}</li>)}</ol>
         </div>
         <div class="f" data-field="wallet.ownershipOk" data-type="check" data-required="1">
-          <label class="check-row"><input type="checkbox" name="wallet.ownershipOk" />{c.s6.ownershipCheck}</label>
+          <label class="check-row"><input type="checkbox" name="wallet.ownershipOk" />{c.s3.ownershipCheck}</label>
           <p class="err" data-err-for="wallet.ownershipOk"></p>
         </div>
         <div class="declaration-box">
-          <strong>{c.s6.riskTitle}</strong>
-          <ol>{c.s6.risk.map((x) => <li>{x}</li>)}</ol>
+          <strong>{c.s3.riskTitle}</strong>
+          <ol>{c.s3.risk.map((x) => <li>{x}</li>)}</ol>
         </div>
         <div class="f" data-field="wallet.riskOk" data-type="check" data-required="1">
-          <label class="check-row"><input type="checkbox" name="wallet.riskOk" />{c.s6.riskCheck}</label>
+          <label class="check-row"><input type="checkbox" name="wallet.riskOk" />{c.s3.riskCheck}</label>
           <p class="err" data-err-for="wallet.riskOk"></p>
-        </div>
-        <div class="fgrid">
-          <Field name="wallet.proofType" label={c.s6.proof} type="radios" options={opts(c.s6.proofOptions)} required span {...common} />
-        </div>
-        <div class="doc-list">
-          <div class="doc-row" data-doc="walletProof" data-doc-required="1">
-            <div><div class="name">{c.s6.proof}</div><span class="badge req-b">{c.required}</span></div>
-            <label class="btn btn-outline upload-btn">{c.s5.upload}<input type="file" accept={ACCEPT} multiple data-upload="walletProof" /></label>
-            <div class="files" data-files="walletProof"></div>
-          </div>
         </div>
       </section>
 
-      <!-- ⑦ 声明与签名 -->
-      <section class="card form-card" data-step="6" hidden>
+      <!-- ④ 声明与签名（v7：授权代表姓名自动带出授权联系人） -->
+      <section class="card form-card" data-step="3" hidden>
         <p class="step-label" data-step-label></p>
-        <h2>{c.s7.title}</h2>
-        <div class="declaration-box"><p class="m0">{c.s7.declaration}</p></div>
+        <h2>{c.s4.title}</h2>
+        <div class="declaration-box"><p class="m0">{c.s4.declaration}</p></div>
         <div class="fgrid">
-          <Field name="decl.repName" label={c.s7.repName} required {...common} />
-          <Field name="decl.position" label={c.s7.position} required {...common} />
+          <Field name="decl.repName" label={c.s4.repName} hint={c.s4.repPrefill} required {...common} />
+          <Field name="decl.position" label={c.s4.position} required {...common} />
         </div>
         <div class="f" data-field="decl.confirm" data-type="check" data-required="1">
-          <label class="check-row"><input type="checkbox" name="decl.confirm" />{c.s7.confirm}</label>
+          <label class="check-row"><input type="checkbox" name="decl.confirm" />{c.s4.confirm}</label>
           <p class="err" data-err-for="decl.confirm"></p>
         </div>
         <div class="f">
-          <span class="lbl">{c.s7.signature}<span class="req" aria-hidden="true">*</span></span>
-          <div class="sig-wrap"><canvas data-signature aria-label={c.s7.signature} role="img"></canvas><div class="sig-line"></div></div>
-          <div class="sig-tools"><span>{c.s7.signHint}</span><button type="button" class="link-btn" data-sig-clear>{c.s7.clear}</button></div>
+          <span class="lbl">{c.s4.signature}<span class="req" aria-hidden="true">*</span></span>
+          <div class="sig-wrap"><canvas data-signature aria-label={c.s4.signature} role="img"></canvas><div class="sig-line"></div></div>
+          <div class="sig-tools"><span>{c.s4.signHint}</span><button type="button" class="link-btn" data-sig-clear>{c.s4.clear}</button></div>
           <p class="err" data-err-for="signature"></p>
-          <p class="hint">{c.s7.recorded}</p>
+          <p class="hint">{c.s4.recorded}</p>
         </div>
       </section>
 
