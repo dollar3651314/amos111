@@ -199,6 +199,50 @@ test.describe.serial('页面走查', () => {
     await admin.setViewportSize({ width: 1280, height: 900 }); await merchant.setViewportSize({ width: 1280, height: 900 });
   });
 
+  // v7（AC-7-14）：开户页 4 个步骤，桌面和手机；空状态、校验出错、接口出错
+  test('开户页：4 个步骤（桌面、手机）、校验出错、接口出错', async ({ browser }) => {
+    // 每一轮用一份新的申请：填过第 ① 步的申请再打开时会直接到第 ② 步
+    let n = 0;
+    const newLink = async () => {
+      const email = `walk-onboarding-${++n}@walk.example`;
+      const r = await post(admin, '/api/kyb/?g=admin&a=invite', { company: 'Walkthrough Onboarding Co', email });
+      expect(r.status).toBe(200);
+      await expect.poll(() => mailsTo(email).length).toBeGreaterThan(0);
+      return mailsTo(email).at(-1)!.match(/https?:\/\/[^\s]+\/onboarding\/\?t=[A-Za-z0-9_-]+/)![0].replace(/^https?:\/\/[^/]+/, B);
+    };
+    for (const [w, h, tag] of [[1280, 900, 'd'], [390, 844, 'm']] as const) {
+      const ctx = await browser.newContext({ baseURL: B, viewport: { width: w, height: h } });
+      const page = await ctx.newPage(); watch(page, `onboarding-${tag}`);
+      for (const lang of ['', '/zh']) {
+        const link = await newLink();
+        await page.goto(`${B}${lang}${link.replace(B, '')}`);
+        await expect(page.locator('#ob-form')).toBeVisible();
+        // 前端校验会阻止跳到后面的步骤：逐个只显示一个步骤来截图（空状态）
+        for (let i = 0; i < 4; i++) {
+          await page.evaluate((n) => document.querySelectorAll<HTMLElement>('[data-step]').forEach((e) => (e.hidden = e.dataset.step !== String(n))), i);
+          await shot(page, `onboarding-${tag}${lang.replace('/', '-')}-step${i + 1}-empty`);
+        }
+        // 校验出错：第 ① 步、第 ② 步不填直接下一步
+        await page.goto(`${B}${lang}${link.replace(B, '')}`);
+        await page.click('[data-next]'); await page.waitForTimeout(300);
+        await shot(page, `onboarding-${tag}${lang.replace('/', '-')}-step1-errors`);
+        // 填好第 ① 步，进入第 ② 步后不填直接下一步
+        for (const [k, v] of Object.entries({ legalName: 'Walk Co', legalForm: 'Ltd', regNumber: '1', incDate: '2020-01-01', incPlace: 'SG', regAddress: 'a', physAddress: 'a', website: 'walk.example', email: 'a@walk.example', phone: '+65 1234 5678' })) await page.fill(`[name="entity.${k}"]`, v);
+        for (const [k, v] of [['nature', 'export'], ['purpose', 'deposits'], ['volume', 'lt50k'], ['currencies', 'usdt'], ['markets', 'apac'], ['sanctions', 'no']]) await page.check(`[name="entity.${k}"][value="${v}"]`);
+        await page.click('[data-next]');
+        await expect(page.locator('[data-step="1"]')).toBeVisible();
+        await page.click('[data-add-person]');
+        await page.click('[data-next]'); await page.waitForTimeout(300);
+        await shot(page, `onboarding-${tag}${lang.replace('/', '-')}-step2-errors`);
+      }
+      // 接口出错：打开页面时接口返回 500
+      await page.route(/\/api\/kyb\//, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"ok":false,"error":"server_error"}' }));
+      await page.goto(await newLink()); await page.waitForTimeout(800);
+      await shot(page, `onboarding-${tag}-4-error`);
+      await ctx.close();
+    }
+  });
+
   test('状态 3：接口很慢（3 秒时的样子）和状态 4：接口出错', async () => {
     for (const [state, handler] of [
       ['3-slow', async (route: any) => { await new Promise((r) => setTimeout(r, 25_000)); await route.continue().catch(() => {}); }],

@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { encryptJson, decryptJson } from '../kyb/crypto.js';
 import * as core from './core.js';
 import { PayError, CUSTOMER_RE } from './core.js';
-import { parseAmount, iso, page } from './common.js';
+import { parseAmount, iso, page, emailHash } from './common.js';
 import { checkCallbackUrl } from './callbacks.js';
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,255}$/;
@@ -14,6 +14,7 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
   const enc = (s) => (s ? encryptJson(keys.enc, s) : '');
   const dec = (s) => { if (!s) return ''; try { return decryptJson(keys.enc, s); } catch { return ''; } };
   const payUrl = (id) => `${payBase}/pay/${id}/`;
+  const eh = (s) => emailHash(keys, s);
 
   const customerView = (c) => ({
     customer_id: c.customer_id, name: c.name, email: dec(c.email_enc), remark: c.remark, address: c.address,
@@ -38,10 +39,11 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
       if (!CUSTOMER_RE.test(id)) throw new PayError('invalid_param', 422, 'customer_id');
       if (b.email && !EMAIL_RE.test(String(b.email))) throw new PayError('invalid_param', 422, 'email');
       const c = await db.tx(async (t) => {
-        const row = await core.ensureCustomer(t, m.id, id, { name: cleanText(b.name, 200), emailEnc: enc(cleanText(b.email, 320)) });
+        const email = cleanText(b.email, 320);
+        const row = await core.ensureCustomer(t, m.id, id, { name: cleanText(b.name, 200), emailEnc: enc(email), emailHash: eh(email) });
         const sets = [], vals = [m.id, id];
         if (b.name !== undefined) { vals.push(cleanText(b.name, 200)); sets.push(`name = $${vals.length}`); }
-        if (b.email !== undefined) { vals.push(enc(cleanText(b.email, 320))); sets.push(`email_enc = $${vals.length}`); }
+        if (b.email !== undefined) { vals.push(enc(email), eh(email)); sets.push(`email_enc = $${vals.length - 1}`, `email_hash = $${vals.length}`); }
         if (b.remark !== undefined) { vals.push(cleanText(b.remark, 500)); sets.push(`remark = $${vals.length}`); }
         if (!sets.length) return row;
         return (await t.query(`update customers set ${sets.join(', ')} where merchant_id = $1 and customer_id = $2 returning *`, vals))[0];
@@ -55,11 +57,18 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
       if (cursor) { vals.push(new Date(Number(cursor))); where += ` and created_at < $${vals.length}`; }
       let rows;
       if (q) {
-        // 按客户标识、名称、邮箱模糊搜索，或按地址精确搜索。邮箱是加密保存的，只能解密后在这里比对：
-        // 每次最多比对最近的 5000 个客户（试用阶段足够；客户很多时再改为保存邮箱的检索用哈希）
+        // 按客户标识、名称、邮箱模糊搜索，或按地址精确搜索。邮箱是加密保存的：
+        // - v7（L6）：输入的是完整邮箱时，按检索哈希精确查找，不受客户数量限制
+        // - 部分邮箱：解密最近的 5000 个客户后比对（保持 v6 的体验）
         const needle = q.toLowerCase();
         const cand = await db.query(`select * from customers where ${where} order by created_at desc limit 5000`, vals);
-        rows = cand.filter((r) => r.address === q || [r.customer_id, r.name, dec(r.email_enc)].some((v) => (v || '').toLowerCase().includes(needle))).slice(0, limit + 1);
+        rows = cand.filter((r) => r.address === q || [r.customer_id, r.name, dec(r.email_enc)].some((v) => (v || '').toLowerCase().includes(needle)));
+        if (EMAIL_RE.test(q.trim())) {
+          const exact = await db.query(`select * from customers where ${where} and email_hash = $${vals.length + 1} order by created_at desc limit ${limit + 1}`, [...vals, eh(q)]);
+          const seen = new Set(rows.map((r) => r.customer_id));
+          rows = [...rows, ...exact.filter((r) => !seen.has(r.customer_id))].sort((x, y) => new Date(y.created_at) - new Date(x.created_at));
+        }
+        rows = rows.slice(0, limit + 1);
       } else {
         vals.push(limit + 1);
         rows = await db.query(`select * from customers where ${where} order by created_at desc limit $${vals.length}`, vals);
@@ -84,7 +93,7 @@ export function createOps({ db, keys, payBase = '', keyPrefix = 'qc_live_' }) {
     async createOrder(m, b) {
       if (b.customer_email && !EMAIL_RE.test(String(b.customer_email))) throw new PayError('invalid_param', 422, 'customer_email');
       const o = await core.createOrder(db, m, {
-        customerId: String(b.customer_id || ''), customerName: cleanText(b.customer_name, 200), customerEmailEnc: enc(cleanText(b.customer_email, 320)),
+        customerId: String(b.customer_id || ''), customerName: cleanText(b.customer_name, 200), customerEmailEnc: enc(cleanText(b.customer_email, 320)), customerEmailHash: eh(cleanText(b.customer_email, 320)),
         merchantOrderNo: String(b.merchant_order_no || ''), amount: parseAmount(b.amount),
       });
       const { address, ...v } = o;

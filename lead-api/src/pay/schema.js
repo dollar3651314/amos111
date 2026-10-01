@@ -214,6 +214,10 @@ alter table customers add column if not exists onchain bigint not null default 0
 create index if not exists customers_onchain on customers (onchain) where onchain > 0;
 alter table sign_batches add column if not exists verified_until timestamptz;
 
+-- v7（L6）：客户邮箱的检索哈希（HMAC，见 common.js 的 emailHash）。按完整邮箱查找客户时用，客户再多也不用逐个解密
+alter table customers add column if not exists email_hash text not null default '';
+create index if not exists customers_email_hash on customers (merchant_id, email_hash) where email_hash <> '';
+
 create table if not exists pay_audit (
   id bigserial primary key,
   actor text not null,
@@ -223,6 +227,28 @@ create table if not exists pay_audit (
   at timestamptz not null default now()
 );
 `;
+
+/**
+ * v7（L6）：给已有的客户补算邮箱哈希（上线后第一次启动时执行，每批 500 个；全部补完后记一个标记，以后不再执行）。
+ * 新建、修改客户时由 ops.js 同步写入，不需要再补。
+ */
+export async function backfillEmailHash(db, { decrypt, hash }) {
+  const [done] = await db.query(`select 1 from pay_meta where key = 'email_hash_v7'`);
+  if (done) return 0;
+  let n = 0, last = -1;
+  for (;;) {
+    // 按地址序号（唯一）往后翻页；解密失败的行跳过，不会反复处理
+    const rows = await db.query(`select hd_index, email_enc from customers where email_hash = '' and email_enc <> '' and hd_index > $1 order by hd_index limit 500`, [last]);
+    if (!rows.length) break;
+    for (const r of rows) {
+      let e = ''; try { e = decrypt(r.email_enc); } catch { e = ''; }
+      if (e) { await db.query('update customers set email_hash = $1 where hd_index = $2', [hash(e), r.hd_index]); n++; }
+    }
+    last = rows.at(-1).hd_index;
+  }
+  await db.query(`insert into pay_meta (key, value) values ('email_hash_v7', 'true'::jsonb) on conflict (key) do nothing`);
+  return n;
+}
 
 /** 执行建表脚本，并记录版本号 */
 export async function migrate(db) {

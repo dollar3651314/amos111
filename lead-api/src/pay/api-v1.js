@@ -27,17 +27,37 @@ export function signRequest(secret, ts, method, path, body) {
   return createHmac('sha256', secret).update([ts, method, path, bodyHash].join('\n')).digest('hex');
 }
 
-// 每个 API Key 每秒最多 20 个请求（同一个函数实例内计数；迁移到云服务器后改为集中限流）
-const buckets = new Map();
-function allow(key, now) {
-  const b = buckets.get(key) || { t: now, n: 0 };
-  if (now - b.t >= 1000) { b.t = now; b.n = 0; }
-  b.n++; buckets.set(key, b);
-  if (buckets.size > 5000) buckets.clear();
-  return b.n <= 20;
+// 每个 API Key 每秒最多 20 个请求。
+// v7（L5）：计数放在 Redis（生产是 Upstash），所有函数实例共享；本地和测试用 Redis 的内存替身，代码相同。
+// Redis 出错或超过 1 秒没有响应时放行并记录日志：不让限流故障挡住正常收款（需求说明书 v7 §3.1）。
+export const RATE_PER_SEC = 20;
+export function createRateLimiter({ redis, log = console, timeoutMs = 1000 }) {
+  const local = new Map(); // 没有 Redis 时（只在单元测试里）退回单实例计数
+  return async function allow(key, now) {
+    const sec = Math.floor(now / 1000);
+    const id = createHash('sha256').update(key).digest('hex').slice(0, 24); // Redis 里不存 API Key 原文
+    if (!redis) {
+      const k = `${id}:${sec}`; const n = (local.get(k) || 0) + 1; local.set(k, n);
+      if (local.size > 5000) local.clear();
+      return n <= RATE_PER_SEC;
+    }
+    const rk = `qc:v1rl:${id}:${sec}`;
+    try {
+      let timer;
+      const n = await Promise.race([
+        redis.incr(rk),
+        new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), timeoutMs); }),
+      ]).finally(() => clearTimeout(timer));
+      if (n === 1) redis.expire(rk, 5).catch(() => {}); // 窗口 1 秒，多留几秒再过期
+      return Number(n) <= RATE_PER_SEC;
+    } catch (err) {
+      log.error(`[pay] RATE_LIMIT_UNAVAILABLE ${err.message}`);
+      return true;
+    }
+  };
 }
 
-export function createApiV1({ db, keys, ops, getIp = () => '', now = () => Date.now() }) {
+export function createApiV1({ db, keys, ops, getIp = () => '', now = () => Date.now(), redis, log = console, allow = createRateLimiter({ redis, log }) }) {
   async function auth(request, raw) {
     const key = request.headers.get('x-qc-key') || '';
     const ts = request.headers.get('x-qc-timestamp') || '';
@@ -49,7 +69,7 @@ export function createApiV1({ db, keys, ops, getIp = () => '', now = () => Date.
     const secret = decryptJson(keys.enc, m.api_secret_enc);
     if (!safeEqual(signRequest(secret, ts, request.method, canonicalPath(request.url), raw), sig.toLowerCase())) throw new PayError('invalid_signature', 401);
     if (m.status !== 'active') throw new PayError('merchant_disabled', 403);
-    if (!allow(key, now())) throw new PayError('rate_limited', 429);
+    if (!(await allow(key, now()))) throw new PayError('rate_limited', 429);
     return m;
   }
   /** 同一个 Idempotency-Key：请求内容相同就返回第一次的结果，不同就返回 409 */
