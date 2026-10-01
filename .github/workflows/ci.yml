@@ -1,0 +1,80 @@
+# 每个 PR 的自动检查（agents 规则 C54）：不通过的 PR 不能合并到 staging（测试环境）和 main（生产）。
+# GitHub 的分支保护把这里的两个检查设为"必须通过"（Amos 在仓库 Settings → Branches 里设置）。
+# 不需要任何密钥：数据库用 GitHub 提供的 Postgres 容器，链上用 TronGrid 替身，邮件用本地模拟 SMTP。
+name: ci
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # 单元测试：内嵌 Postgres 跑一遍，真实 Postgres 16 再跑一遍（C37）；项目索引检查（C53）
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 项目索引检查
+        run: node scripts/check-project-index.mjs
+      - name: 单元测试（内嵌 Postgres）
+        run: npm test
+      - name: 单元测试（真实 Postgres 16，和线上同一个驱动）
+        env:
+          TEST_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
+        run: npm test
+
+  # 端到端测试：构建页面，在本地整套环境（和线上同一份代码）上跑全部用例；收付款用真实 Postgres
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: ci
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+            e2e/package-lock.json
+      - run: npm ci
+      - name: 构建页面（先检查中英文案结构）
+        run: cd site && npm ci && npm run build
+      - name: 安装测试浏览器
+        run: cd e2e && npm ci && npx playwright install --with-deps chromium
+      - name: 端到端测试
+        env:
+          E2E_DATABASE_URL: postgres://postgres:ci@127.0.0.1:5432/postgres
+        run: cd e2e && npx playwright test
+      - name: 失败时保存截图和日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: e2e/test-results/
+          retention-days: 7
